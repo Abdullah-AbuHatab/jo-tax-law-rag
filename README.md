@@ -3,6 +3,9 @@
 Arabic question answering over Jordanian tax laws. Every answer cites the article it comes from, and the
 system refuses when the laws it has do not answer the question.
 
+**Live demo:** https://jo-tax-law-rag.onrender.com (API docs at `/docs`). Free hosting: the first request after
+15 idle minutes takes about a minute, and an answer takes 10–25 s on the free models.
+
 > **Not legal advice.** This is a portfolio project that returns automatically extracted information from
 > public law texts. The texts may be outdated. Check the official text or ask a qualified professional before
 > relying on anything it says.
