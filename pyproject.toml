@@ -1,0 +1,26 @@
+[project]
+name = "jo-tax-law-rag"
+version = "1.0.0"
+description = "Arabic question answering over Jordanian tax laws with article-level citations."
+requires-python = ">=3.12"
+license = { text = "MIT" }
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "S", "SIM", "RUF"]
+ignore = [
+    "RUF001", "RUF002", "RUF003",  # Arabic text is intentional, not ambiguous characters
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "S105", "S106"]   # assert and fake keys are fine in tests
+"tools/**" = ["S603", "S607"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-ra"
+markers = ["integration: needs TEST_DATABASE_URL (pgvector)"]

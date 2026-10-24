@@ -1,0 +1,153 @@
+:root {
+  --color-bg: #f6f7f9;
+  --color-surface: #ffffff;
+  --color-text: #1b1f24;
+  --color-muted: #5b6470;
+  --color-border: #d7dce2;
+  --color-primary: #0b5c4a;
+  --color-primary-text: #ffffff;
+  --color-notice-bg: #fff6e0;
+  --color-notice-border: #e8b64c;
+  --color-danger: #a1261b;
+  --color-focus: #1a73e8;
+  --space-xs: 0.25rem;
+  --space-sm: 0.5rem;
+  --space-md: 1rem;
+  --space-lg: 1.5rem;
+  --radius: 0.5rem;
+  --max-width: 52rem;
+  --font: "Segoe UI", Tahoma, "Noto Naskh Arabic", "Noto Sans Arabic", Arial, sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-bg: #121519;
+    --color-surface: #1b2026;
+    --color-text: #e8ebef;
+    --color-muted: #a5adb8;
+    --color-border: #333b45;
+    --color-primary: #3fb497;
+    --color-primary-text: #0d1512;
+    --color-notice-bg: #2c2615;
+    --color-notice-border: #a9852f;
+    --color-danger: #ff8a7f;
+    --color-focus: #8ab4f8;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font);
+  font-size: 1rem;
+  line-height: 1.8;
+}
+
+.container {
+  width: 100%;
+  max-width: var(--max-width);
+  margin: 0 auto;
+  padding: 0 var(--space-md);
+}
+
+.skip-link {
+  position: absolute;
+  inset-inline-start: var(--space-md);
+  top: -3rem;
+  background: var(--color-surface);
+  padding: var(--space-sm) var(--space-md);
+}
+.skip-link:focus { top: var(--space-sm); }
+
+.site-header { padding: var(--space-lg) 0 var(--space-sm); }
+h1 { font-size: 1.6rem; margin: 0 0 var(--space-xs); line-height: 1.4; }
+h2 { font-size: 1.25rem; margin: 0 0 var(--space-sm); }
+h3 { font-size: 1.05rem; margin: var(--space-md) 0 var(--space-sm); }
+.lead, .muted { color: var(--color-muted); margin: 0; }
+
+.notice {
+  background: var(--color-notice-bg);
+  border: 1px solid var(--color-notice-border);
+  border-radius: var(--radius);
+  padding: var(--space-sm) var(--space-md);
+}
+
+.card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: var(--space-md);
+  margin: var(--space-md) 0;
+}
+
+label { display: block; font-weight: 600; margin-bottom: var(--space-xs); }
+
+textarea, select {
+  width: 100%;
+  font: inherit;
+  color: inherit;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: var(--space-sm);
+}
+textarea { resize: vertical; min-height: 5rem; }
+
+.form-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  margin-top: var(--space-md);
+}
+.field { flex: 1; }
+
+button {
+  font: inherit;
+  font-weight: 600;
+  border: 1px solid var(--color-primary);
+  background: var(--color-primary);
+  color: var(--color-primary-text);
+  border-radius: var(--radius);
+  padding: var(--space-sm) var(--space-lg);
+  cursor: pointer;
+  min-height: 2.75rem;
+}
+button.secondary { background: transparent; color: var(--color-text); border-color: var(--color-border); }
+button:disabled { opacity: 0.6; cursor: wait; }
+
+:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 2px; }
+
+.field-error, .error { color: var(--color-danger); margin: var(--space-xs) 0 0; }
+.status { min-height: 1.5rem; }
+
+.badge {
+  display: inline-block;
+  border: 1px solid var(--color-danger);
+  color: var(--color-danger);
+  border-radius: var(--radius);
+  padding: 0 var(--space-sm);
+  margin: 0 0 var(--space-sm);
+}
+
+.answer, .article-text { white-space: pre-line; overflow-wrap: anywhere; }
+
+.citations, .retrieved, .notes { padding-inline-start: var(--space-lg); margin: 0; }
+.citations li { margin-bottom: var(--space-sm); }
+.citations button { padding: var(--space-xs) var(--space-md); min-height: 2.25rem; }
+.snippet { display: block; color: var(--color-muted); font-size: 0.95rem; overflow-wrap: anywhere; }
+.retrieved { font-size: 0.9rem; color: var(--color-muted); direction: rtl; }
+details summary { cursor: pointer; margin-top: var(--space-md); }
+
+.panel-head { display: flex; justify-content: space-between; align-items: center; gap: var(--space-sm); }
+.notes { font-size: 0.9rem; color: var(--color-muted); }
+a { color: var(--color-primary); overflow-wrap: anywhere; }
+
+.site-footer { color: var(--color-muted); font-size: 0.9rem; padding-bottom: var(--space-lg); }
+
+@media (min-width: 40rem) {
+  .form-row { flex-direction: row; align-items: flex-end; }
+  h1 { font-size: 2rem; }
+}

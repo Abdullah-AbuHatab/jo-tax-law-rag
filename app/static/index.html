@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>قوانين الضرائب الأردنية</title>
+  <meta name="description" content="أسئلة وأجوبة من نصوص قانون ضريبة الدخل وقانون الضريبة العامة على المبيعات، مع الاستشهاد بالمواد.">
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="/static/app.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#question">انتقل إلى السؤال</a>
+  <header class="site-header">
+    <div class="container">
+      <h1>اسأل قوانين الضرائب الأردنية</h1>
+      <p class="lead">إجابات من نصوص قانون ضريبة الدخل وقانون الضريبة العامة على المبيعات فقط، مع رقم المادة لكل معلومة.</p>
+    </div>
+  </header>
+
+  <main class="container">
+    <p class="notice" role="note">
+      <strong>تنبيه:</strong> هذه أداة معلومات وليست استشارة قانونية. قد تكون النصوص غير محدثة،
+      فراجع النص الرسمي أو مختصاً قبل الاعتماد على أي إجابة.
+    </p>
+
+    <form id="ask-form" class="card" novalidate>
+      <label for="question">سؤالك</label>
+      <textarea id="question" name="question" rows="3" maxlength="1000" required
+        placeholder="مثال: ما هي نسبة الضريبة العامة على المبيعات؟"></textarea>
+      <p id="question-error" class="field-error" hidden></p>
+
+      <div class="form-row">
+        <div class="field">
+          <label for="law">القانون</label>
+          <select id="law" name="law">
+            <option value="">كل القوانين</option>
+          </select>
+        </div>
+        <button id="submit" type="submit">اسأل</button>
+      </div>
+    </form>
+
+    <section id="status" class="status" aria-live="polite"></section>
+
+    <section id="result" class="card" hidden aria-labelledby="answer-title">
+      <h2 id="answer-title">الإجابة</h2>
+      <p id="refused-badge" class="badge" hidden>لا توجد إجابة في النصوص المتوفرة</p>
+      <p id="answer" class="answer"></p>
+
+      <div id="citations-block" hidden>
+        <h3>المواد المستشهد بها</h3>
+        <ul id="citations" class="citations"></ul>
+      </div>
+
+      <details id="retrieval-block">
+        <summary>تفاصيل الاسترجاع</summary>
+        <ul id="retrieved" class="retrieved"></ul>
+        <p id="model" class="muted"></p>
+      </details>
+    </section>
+
+    <section id="article-panel" class="card" hidden aria-labelledby="article-title" tabindex="-1">
+      <div class="panel-head">
+        <h2 id="article-title"></h2>
+        <button id="close-article" type="button" class="secondary" aria-label="إغلاق نص المادة">إغلاق</button>
+      </div>
+      <p id="article-law" class="muted"></p>
+      <div id="article-text" class="article-text"></div>
+      <ul id="article-notes" class="notes"></ul>
+      <p><a id="article-source" href="#" target="_blank" rel="noopener noreferrer">النص الرسمي (المصدر)</a></p>
+    </section>
+  </main>
+
+  <footer class="container site-footer">
+    <p>المصدر: نصوص موحدة منشورة على موقع دائرة ضريبة الدخل والمبيعات. الشيفرة مفتوحة المصدر (MIT).</p>
+  </footer>
+</body>
+</html>
