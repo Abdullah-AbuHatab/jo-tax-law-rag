@@ -1,0 +1,25 @@
+# secrets
+.env
+.env.*
+!.env.example
+
+# environments and caches
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# regenerable data-preparation output (tools/ rebuilds it from data/raw)
+data/interim/
+
+# editors / OS
+.vscode/
+.idea/
+.claude/
+.DS_Store
+Thumbs.db
