@@ -1,0 +1,36 @@
+# Render Blueprint: one free web service built from the Dockerfile.
+# The database is Neon (Postgres + pgvector), not a Render database.
+# Secrets use sync: false, so Render asks for their values in the dashboard
+# and they never live in this file.
+services:
+  - type: web
+    name: jo-tax-law-rag
+    runtime: docker
+    plan: free
+    region: frankfurt
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: DATABASE_URL          # Neon pooled connection string, sslmode=require
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: DB_CONNECT_TIMEOUT_SECONDS   # Neon wakes a suspended compute in a few seconds
+        value: "10"
+      - key: GEMINI_EMBED_MODEL
+        value: gemini-embedding-001
+      - key: OPENROUTER_MODEL
+        value: nvidia/nemotron-3-ultra-550b-a55b:free
+      - key: OPENROUTER_FALLBACK_MODELS
+        value: cohere/north-mini-code:free,google/gemma-4-31b-it:free
+      - key: MIN_SIMILARITY        # calibrate with python -m app.eval, then update
+        value: "0.60"
+      - key: RATE_LIMIT_PER_MINUTE
+        value: "10"
+      - key: TRUSTED_PROXY_HOPS    # assumes Render appends the client IP to X-Forwarded-For; verify after deploy
+        value: "1"
+      - key: CORS_ALLOW_ORIGINS    # empty: the UI is served from the same origin
+        value: ""

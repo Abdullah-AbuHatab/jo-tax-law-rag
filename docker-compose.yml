@@ -1,0 +1,43 @@
+# Local stack: the API + Postgres with pgvector.
+#
+#   docker compose up --build                          # real providers: needs .env with keys
+#   EMBEDDER=fake LLM=fake docker compose up --build   # offline demo against the same database
+#
+# Ingest (once, and again whenever data/clean changes):
+#   docker compose run --rm api python -m app.ingest
+
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: rag
+      POSTGRES_PASSWORD: rag-local-only   # local container only; Neon credentials never go here
+      POSTGRES_DB: rag
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rag -d rag"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build: .
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      DATABASE_URL: postgresql://rag:rag-local-only@db:5432/rag
+      EMBEDDER: ${EMBEDDER:-gemini}
+      LLM: ${LLM:-openrouter}
+      PORT: "8000"
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pgdata:
