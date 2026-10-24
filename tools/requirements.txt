@@ -1,0 +1,3 @@
+# Data-preparation tools only (tools/repair_pdf_tounicode.py). Not needed to run the app.
+pypdf==5.4.0
+fonttools==4.57.0
