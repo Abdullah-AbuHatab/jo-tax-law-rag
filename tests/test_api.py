@@ -596,3 +596,15 @@ def test_page_csp_has_no_data_images_and_no_plugins(make_client):
     client, _, _ = make_client()
     assert client.get("/").headers["content-security-policy"] == INDEX_CSP_EXPECTED
     assert client.head("/").headers["content-security-policy"] == INDEX_CSP_EXPECTED
+
+
+def test_client_ip_diagnostics_are_private_and_masked(make_client):
+    client, _, _ = make_client(health_token="s3cret-health-token")
+    headers = {"x-forwarded-for": "203.0.113.9, 198.51.100.7", "cf-connecting-ip": "192.0.2.44"}
+    assert client.get("/health/client", headers=headers).status_code == 404  # no token
+    body = client.get("/health/client", headers={**headers, **HEALTH}).json()
+    assert body["cf_connecting_ip"] == "192.0.2.x"
+    assert body["x_forwarded_for"] == ["203.0.113.x", "198.51.100.x"]
+    assert body["true_client_ip"] is None and body["x_real_ip"] is None
+    assert "44" not in str(body) and ".9" not in str(body)  # never a full address
+    assert "/health/client" not in client.get("/openapi.json").json()["paths"]

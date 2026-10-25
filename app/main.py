@@ -12,6 +12,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import hmac
+import ipaddress
 import logging
 import mimetypes
 import re
@@ -435,6 +436,36 @@ def create_app(
         except DatabaseUnavailable:
             return error_response("DATABASE_UNAVAILABLE", 503)
         return {"status": "ok"}
+
+    def _mask_ip(value: str | None) -> str | None:
+        """An address shortened for display: IPv4 without its last octet, IPv6 to its /64."""
+        if not value:
+            return None
+        try:
+            address = ipaddress.ip_address(value.strip())
+        except ValueError:
+            return "invalid"
+        if address.version == 4:
+            return ".".join(str(address).split(".")[:3]) + ".x"
+        return str(ipaddress.ip_network(f"{address}/64", strict=False))
+
+    @app.get("/health/client", include_in_schema=False)
+    def health_client(request: Request) -> dict[str, object]:
+        """Private diagnostic (same token as /health/db): which client-IP headers reach
+        the app, masked, so the owner can check the rate-limit key source after a deploy."""
+        presented = request.headers.get("x-health-token", "").encode()
+        if not health_token or not hmac.compare_digest(presented, health_token):
+            raise HTTPException(status_code=404)
+        forwarded = request.headers.get("x-forwarded-for", "")
+        return {
+            "configured_header": settings.client_ip_header or None,
+            "trusted_proxy_hops": settings.trusted_proxy_hops,
+            "cf_connecting_ip": _mask_ip(request.headers.get("cf-connecting-ip")),
+            "true_client_ip": _mask_ip(request.headers.get("true-client-ip")),
+            "x_real_ip": _mask_ip(request.headers.get("x-real-ip")),
+            "x_forwarded_for": [_mask_ip(part) for part in forwarded.split(",") if part.strip()],
+            "peer": _mask_ip(request.client.host if request.client else None),
+        }
 
     @app.post(
         "/ask",
