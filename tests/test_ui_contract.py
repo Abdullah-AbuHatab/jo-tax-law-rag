@@ -97,8 +97,23 @@ def test_page_keeps_its_honest_caveats():
     english = re.search(r'<section[^>]*lang="en"[^>]*>(.*?)</section>', PAGE, re.S)
     assert english and "Not legal advice" in english.group(1)
     assert "لا تضمن صحة كل إجابة" in PAGE
-    for claim in ("zero hallucinated", "Production-hardened", "تحقق برمجي 100%", "موثّق", "موثق", "بدقة مثبتة"):
-        assert claim not in PAGE and claim not in SCRIPT, claim
+    for claim in (
+        "zero hallucinated",
+        "Production-hardened",
+        "تحقق برمجي 100%",
+        "موثّق",
+        "موثق",
+        "بدقة مثبتة",
+        "Grounded Legal Truth",
+        "Zero Hallucination",
+        "hallucination",
+        "هلوس",
+        "مدقق",
+        "مضمون",
+        "حقيقة قانونية",
+        "0% Uncited",
+    ):
+        assert claim.lower() not in PAGE.lower() and claim.lower() not in SCRIPT.lower(), claim
 
 
 def test_eval_numbers_on_the_page_match_results_md():
@@ -194,3 +209,75 @@ def test_reader_navigation_is_driven_by_the_server():
 def test_coverage_offers_browsing_and_currency():
     for needle in ("version_ar", "coverage_note_ar", "تصفّح مواد القانون"):
         assert needle in SCRIPT, needle
+
+
+def test_ui_hardcodes_no_pipeline_facts():
+    from app.config import Settings
+
+    settings = Settings()
+    assert f"{settings.min_similarity:.2f}" in PAGE
+    for fact in ("text-embedding", "1536", "768", "gemini-2", "nemotron", "pgvector v", "HNSW"):
+        assert fact.lower() not in PAGE.lower() and fact.lower() not in SCRIPT.lower(), fact
+
+
+def test_readout_reads_the_response():
+    for field in ("refusal_reason", "dropped_citations", "performance.now()"):
+        assert field in SCRIPT, field
+    assert ">= 0.6" not in SCRIPT
+    assert "< 0.6" not in SCRIPT
+    assert ">= 0.60" not in SCRIPT
+    assert "< 0.60" not in SCRIPT
+
+
+def test_no_live_region_on_result():
+    elements = page_elements()
+    result = next(attrs for tag, attrs in elements if attrs.get("id") == "result")
+    assert "aria-live" not in result
+
+
+def test_token_contrast_pairs():
+    def parse_tokens(block: str) -> dict[str, str]:
+        return {k: v.strip() for k, v in re.findall(r"(--[a-z0-9-]+)\s*:\s*([^;]+);", block)}
+
+    root_match = re.search(r":root\s*{(.*?)}", CSS, re.S)
+    dark_match = re.search(r"@media\s*\(prefers-color-scheme:\s*dark\)\s*{\s*:root\s*{(.*?)}", CSS, re.S)
+    assert root_match and dark_match
+
+    root = parse_tokens(root_match.group(1))
+    dark = dict(root)
+    dark.update(parse_tokens(dark_match.group(1)))
+
+    def hex_to_rgb(h: str) -> tuple[float, float, float]:
+        h = h.lstrip("#")
+        return tuple(int(h[i : i + 2], 16) / 255.0 for i in (0, 2, 4))  # type: ignore
+
+    def rel_lum(rgb: tuple[float, float, float]) -> float:
+        def channel(c: float) -> float:
+            return c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
+
+        r, g, b = [channel(c) for c in rgb]
+        return 0.2126 * r + 0.7152 * g + 0.0722 * b
+
+    def contrast(hex1: str, hex2: str) -> float:
+        l1, l2 = rel_lum(hex_to_rgb(hex1)), rel_lum(hex_to_rgb(hex2))
+        return (max(l1, l2) + 0.05) / (min(l1, l2) + 0.05)
+
+    text_pairs = [
+        ("--color-ink", "--color-page"),
+        ("--color-ink", "--color-surface"),
+        ("--color-muted", "--color-page"),
+        ("--color-muted", "--color-surface"),
+        ("--color-on-accent", "--color-accent"),
+        ("--color-statute", "--color-quote"),
+        ("--color-statute", "--color-surface"),
+    ]
+    non_text_pairs = [
+        ("--color-control-border", "--color-page"),
+        ("--color-statute-rule", "--color-quote"),
+    ]
+
+    for palette in (root, dark):
+        for fg, bg in text_pairs:
+            assert contrast(palette[fg], palette[bg]) >= 4.5, f"{fg} on {bg}"
+        for fg, bg in non_text_pairs:
+            assert contrast(palette[fg], palette[bg]) >= 3.0, f"{fg} vs {bg}"

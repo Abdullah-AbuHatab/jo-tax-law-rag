@@ -540,8 +540,11 @@ def create_app(
 
     @app.get("/config", response_model=PublicConfigOut, tags=["config"])
     def public_config() -> PublicConfigOut:
-        """What the page needs to know: the Turnstile site key (public), or null when it is off."""
-        return PublicConfigOut(turnstile_site_key=settings.turnstile_site_key if captcha is not None else None)
+        """What the page needs to know: the Turnstile site key (public) and gate threshold."""
+        return PublicConfigOut(
+            turnstile_site_key=settings.turnstile_site_key if captcha is not None else None,
+            min_similarity=settings.min_similarity,
+        )
 
     @app.get("/laws", response_model=list[LawOut], tags=["laws"])
     def list_laws() -> list[LawOut]:

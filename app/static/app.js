@@ -154,6 +154,8 @@ function articleLabel(key) {
   return match ? `${match[1]} مكرر` : String(key);
 }
 
+const appConfig = { minSimilarity: null };
+
 // ---- laws -------------------------------------------------------------------
 
 const lawsById = new Map();
@@ -394,70 +396,204 @@ async function copyAnswer() {
   }
 }
 
+let copyJsonResetTimer = null;
+
+async function copyJson() {
+  if (!lastAnswer || !lastAnswer.data) return;
+  const btn = $("copy-json");
+  if (!btn) return;
+  try {
+    await navigator.clipboard.writeText(JSON.stringify(lastAnswer.data, null, 2));
+    btn.textContent = "نُسخت استجابة JSON";
+    clearTimeout(copyJsonResetTimer);
+    copyJsonResetTimer = setTimeout(() => {
+      btn.textContent = "نسخ استجابة JSON الأصلية";
+    }, 2000);
+  } catch {
+    btn.textContent = "تعذّر النسخ";
+    clearTimeout(copyJsonResetTimer);
+    copyJsonResetTimer = setTimeout(() => {
+      btn.textContent = "نسخ استجابة JSON الأصلية";
+    }, 2000);
+  }
+}
+
+function renderBadge(data) {
+  const badge = $("result-badge");
+  if (!badge) return;
+  if (data.refused) {
+    badge.hidden = true;
+    return;
+  }
+  const dropped = data.dropped_citations || [];
+  const badgeText = $("badge-text");
+  if (badgeText) {
+    if (dropped.length === 0) {
+      badgeText.textContent = "كل مادة مذكورة هنا استُرجعت فعلاً لهذا السؤال";
+    } else {
+      badgeText.textContent = "استُبعدت استشهادات لم تُسترجع؛ المعروض هنا ما بقي";
+    }
+  }
+  badge.hidden = false;
+}
+
 function renderCitations(citations) {
   const list = $("citations");
   list.replaceChildren();
   citations.forEach((citation, index) => {
     const item = el("li", "citation");
+    const top = el("div", "citation-top");
     const ref = el("p", "citation-ref");
     const lawName = el("span", "citation-law", citation.law_name);
     lawName.id = `citation-law-${index}`;
     ref.append(el("span", "citation-article", `المادة (${citation.article_label})`), lawName);
 
+    const score = Number(citation.score);
+    const scoreEl = el("span", "citation-score");
+    const bdi = el("bdi", "", Number.isFinite(score) ? score.toFixed(SCORE_DIGITS) : "—");
+    bdi.dir = "ltr";
+    scoreEl.append("درجة التشابه: ", bdi);
+    top.append(ref, scoreEl);
+
     const quote = el("blockquote", "law-quote", citation.snippet);
 
-    const open = el("button", "text-button", `اقرأ نص المادة (${citation.article_label}) كاملاً`);
+    const open = el("button", "text-button btn-read-article", `اقرأ نص المادة (${citation.article_label}) كاملاً`);
     open.type = "button";
     open.setAttribute("aria-describedby", lawName.id);
     open.setAttribute("aria-haspopup", "dialog");
     open.addEventListener("click", (event) =>
       openArticle(citation.law_id, citation.article, citation.article_label, citation.law_name, event.currentTarget),
     );
-    item.append(ref, quote, open);
+    item.append(top, quote, open);
     list.appendChild(item);
   });
   $("citations-block").hidden = citations.length === 0;
 }
 
-function renderSearchDetails(data) {
-  const model = $("model");
-  model.replaceChildren();
-  if (data.model) {
-    const name = el("code", "", data.model);
-    name.dir = "ltr";
-    model.append("النموذج اللغوي: ", name);
-  } else {
-    model.textContent = "لم يُستدعَ النموذج اللغوي، فقد رُفض السؤال قبل ذلك.";
+function renderSearchDetails(data, elapsedMs = null) {
+  const retrieved = data.retrieved || [];
+  const scores = retrieved.map((hit) => Number(hit.score)).filter((s) => Number.isFinite(s));
+  const topScore = scores.length > 0 ? Math.max(...scores) : null;
+  const isGateRefused = data.refusal_reason === "LOW_RETRIEVAL_SCORE";
+  const gatePassed = !isGateRefused && retrieved.length > 0;
+  const acceptedCitations = (data.citations || []).length;
+  const droppedCitations = (data.dropped_citations || []).length;
+
+  const chipsContainer = $("telemetry-chips");
+  if (chipsContainer) {
+    chipsContainer.replaceChildren();
+
+    const chipScore = el("span", "telemetry-chip");
+    const chipScoreBdi = el("bdi", "", topScore !== null ? topScore.toFixed(SCORE_DIGITS) : "—");
+    chipScoreBdi.dir = "ltr";
+    chipScore.appendChild(chipScoreBdi);
+    chipsContainer.appendChild(chipScore);
+
+    const chipGate = el("span", `telemetry-chip ${gatePassed ? "is-pass" : (isGateRefused ? "is-refusal" : "")}`);
+    chipGate.textContent = isGateRefused ? "دون العتبة" : (gatePassed ? "اجتاز العتبة" : "—");
+    chipsContainer.appendChild(chipGate);
+
+    const chipCitations = el("span", "telemetry-chip");
+    if (data.refused) {
+      chipCitations.textContent = "مرفوض";
+      chipCitations.classList.add("is-refusal");
+    } else {
+      chipCitations.textContent = `${acceptedCitations} مقبولة`;
+      if (acceptedCitations > 0) chipCitations.classList.add("is-pass");
+    }
+    chipsContainer.appendChild(chipCitations);
+  }
+
+  const metrics = $("telemetry-metrics");
+  if (metrics) {
+    metrics.replaceChildren();
+
+    function addMetric(label, valueNode, isClass = "") {
+      const card = el("div", "metric-card");
+      card.append(el("span", "metric-label", label));
+      const val = el("span", `metric-value ${isClass}`.trim());
+      if (typeof valueNode === "string") val.textContent = valueNode;
+      else val.appendChild(valueNode);
+      card.append(val);
+      metrics.append(card);
+    }
+
+    const topScoreBdi = el("bdi", "", topScore !== null ? topScore.toFixed(SCORE_DIGITS) : "—");
+    topScoreBdi.dir = "ltr";
+    addMetric("أعلى درجة تشابه", topScoreBdi);
+
+    const gateText = isGateRefused ? "دون العتبة، فلم يُستدعَ النموذج" : (retrieved.length > 0 ? "اجتاز العتبة" : "—");
+    addMetric("عتبة الاسترجاع", gateText, gatePassed ? "is-pass" : (isGateRefused ? "is-refusal" : ""));
+
+    if (appConfig.minSimilarity !== null) {
+      const threshBdi = el("bdi", "", appConfig.minSimilarity.toFixed(2));
+      threshBdi.dir = "ltr";
+      addMetric("قيمة العتبة", threshBdi);
+    }
+
+    if (data.model) {
+      const modelCode = el("code", "", data.model);
+      modelCode.dir = "ltr";
+      addMetric("النموذج اللغوي", modelCode);
+    } else {
+      addMetric("النموذج اللغوي", "لم يُستدعَ");
+    }
+
+    addMetric("الاستشهادات", `مقبولة ${acceptedCitations}، مستبعدة ${droppedCitations}`);
+
+    if (typeof elapsedMs === "number" && Number.isFinite(elapsedMs)) {
+      const timeSpan = el("span");
+      const timeBdi = el("bdi", "", `${(elapsedMs / 1000).toFixed(1)} ث`);
+      timeBdi.dir = "ltr";
+      timeSpan.append(timeBdi, " ", el("span", "telemetry-sub", "(يشمل الشبكة، وقد يشمل إيقاظ الخادم)"));
+      addMetric("زمن الانتظار في متصفحك", timeSpan);
+    }
+
+    if (data.error_code) {
+      const errCode = el("code", "", data.error_code);
+      errCode.dir = "ltr";
+      addMetric("رمز الخطأ", errCode);
+    }
   }
 
   const rows = $("retrieved");
   rows.replaceChildren();
-  for (const hit of data.retrieved || []) {
+  for (const hit of retrieved) {
     const row = el("tr");
     const score = Number(hit.score);
+    const tdScore = el("td", "num");
+    if (Number.isFinite(score)) {
+      const scoreBdi = el("bdi", "", score.toFixed(SCORE_DIGITS));
+      scoreBdi.dir = "ltr";
+      tdScore.appendChild(scoreBdi);
+    }
     row.append(
-      el("td", "", lawShortName(hit.law_id).replace(/^قانون\s+/, "")), // the column is already "القانون"
+      el("td", "", lawShortName(hit.law_id).replace(/^قانون\s+/, "")),
       el("td", "num", articleLabel(hit.article)),
       el("td", "num", Number(hit.chunk_index) + 1),
-      el("td", "num", Number.isFinite(score) ? score.toFixed(SCORE_DIGITS) : ""),
+      tdScore,
     );
     rows.appendChild(row);
   }
 
   const dropped = data.dropped_citations || [];
   const droppedNote = $("dropped");
-  droppedNote.textContent = dropped.length
-    ? `استشهادات اقترحها النموذج واستُبعدت لأنها لا تشير إلى مادة مسترجعة: ${dropped.length}`
-    : "";
-  droppedNote.hidden = dropped.length === 0;
+  if (dropped.length > 0) {
+    droppedNote.textContent = `استشهادات اقترحها النموذج واستُبعدت لأنها لا تشير إلى مادة مسترجعة: ${dropped.length}`;
+    droppedNote.hidden = false;
+  } else {
+    droppedNote.textContent = "";
+    droppedNote.hidden = true;
+  }
 }
 
-function renderAnswer(data, request) {
+function renderAnswer(data, request, elapsedMs = null) {
   lastAnswer = { data, request };
   const refused = Boolean(data.refused);
   $("result-question").textContent = request.question;
   const scopeNode = $("result-scope");
   if (scopeNode) scopeNode.textContent = scopeLabel(request.lawId);
+  renderBadge(data);
   renderAnswerText($("answer"), data.answer, refused ? [] : data.citations || []);
   const copyBtn = $("copy-answer");
   if (copyBtn) copyBtn.hidden = refused;
@@ -467,7 +603,7 @@ function renderAnswer(data, request) {
     : "";
   $("result").classList.toggle("is-refused", refused);
   renderCitations(refused ? [] : data.citations || []);
-  renderSearchDetails(data);
+  renderSearchDetails(data, elapsedMs);
   $("result-disclaimer").textContent = data.disclaimer || DEFAULT_DISCLAIMER;
   $("result").hidden = false;
 }
@@ -700,9 +836,14 @@ function loadTurnstile(siteKey) {
 async function setupCaptcha() {
   try {
     const config = await fetchJson("/config");
-    if (config && config.turnstile_site_key) {
-      captcha.enabled = true;
-      loadTurnstile(config.turnstile_site_key);
+    if (config) {
+      if (typeof config.min_similarity === "number") {
+        appConfig.minSimilarity = config.min_similarity;
+      }
+      if (config.turnstile_site_key) {
+        captcha.enabled = true;
+        loadTurnstile(config.turnstile_site_key);
+      }
     }
   } catch {
     // No config: asking works when Turnstile is off; when it is on, the server answers CAPTCHA_REQUIRED.
@@ -814,6 +955,7 @@ async function onSubmit(event) {
     if (request.lawId) body.law_id = request.lawId;
     const headers = { "Content-Type": "application/json" };
     if (captcha.enabled) headers["CF-Turnstile-Response"] = captcha.token;
+    const startFetch = performance.now();
     const data = await fetchJson(
       "/ask",
       {
@@ -823,8 +965,9 @@ async function onSubmit(event) {
       },
       REQUEST_TIMEOUT_MS,
     );
+    const elapsedMs = performance.now() - startFetch;
     stopProgress();
-    renderAnswer(data, request);
+    renderAnswer(data, request, elapsedMs);
     setStatus("done", "", data.refused ? REFUSAL_READY_TEXT : ANSWER_READY_TEXT);
     focusAnswer();
   } catch (error) {
@@ -873,6 +1016,8 @@ function initAskForm() {
   }
   const copyBtn = $("copy-answer");
   if (copyBtn) copyBtn.addEventListener("click", copyAnswer);
+  const copyJsonBtn = $("copy-json");
+  if (copyJsonBtn) copyJsonBtn.addEventListener("click", copyJson);
   updateCount();
   refreshButtons();
   $("submit").disabled = false;

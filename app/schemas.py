@@ -98,6 +98,7 @@ class ArticleOut(BaseModel):
 
 class PublicConfigOut(BaseModel):
     turnstile_site_key: str | None = Field(description="Cloudflare Turnstile site key; null when Turnstile is off.")
+    min_similarity: float = Field(default=0.60, description="Minimum cosine similarity threshold for gate acceptance.")
 
 
 class ErrorBody(BaseModel):

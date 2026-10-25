@@ -6,8 +6,8 @@
   <title>قوانين الضرائب الأردنية: إجابات مستندة إلى المواد</title>
   <meta name="description" content="اسأل عن قانون ضريبة الدخل وقانون الضريبة العامة على المبيعات في الأردن، واحصل على إجابة من نص القانون مع رقم المادة، أو رفض صريح حين لا يجيب النص.">
   <meta name="color-scheme" content="light dark">
-  <meta name="theme-color" content="#f3f5f4" media="(prefers-color-scheme: light)">
-  <meta name="theme-color" content="#101614" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#f6f4ee" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0b111e" media="(prefers-color-scheme: dark)">
   <meta property="og:type" content="website">
   <meta property="og:locale" content="ar_JO">
   <meta property="og:site_name" content="قوانين الضرائب الأردنية">
@@ -24,8 +24,15 @@
   <header class="site-header">
     <div class="container site-header-inner">
       <a class="brand" href="/">
-        <img src="/static/favicon.svg" alt="" width="28" height="28">
-        <span>قوانين الضرائب الأردنية</span>
+        <span class="brand-crest" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+            <path d="M12 2L4 7v6c0 5.55 3.84 10.74 8 12 4.16-1.26 8-6.45 8-12V7l-8-5zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V8.26l7-4.38v8.12z"/>
+          </svg>
+        </span>
+        <span class="brand-text">
+          <span class="brand-title">قوانين الضرائب الأردنية</span>
+          <span class="brand-subtitle">استرجاع مدعّم بالنصوص التشريعية</span>
+        </span>
       </a>
       <nav class="site-nav" aria-label="روابط المشروع">
         <ul>
@@ -37,28 +44,31 @@
     </div>
   </header>
 
-  <div class="container layout">
+  <div class="container">
     <main class="workspace">
-      <h1>اسأل نصّ القانون، واحصل على رقم المادة</h1>
-      <p class="lead">إجابات من نص قانون ضريبة الدخل وقانون الضريبة العامة على المبيعات فقط. تذكر كل إجابة المادة التي استندت إليها، وإن لم يُجب النص عن سؤالك تقول الأداة ذلك صراحة.</p>
-
-      <p class="disclaimer" role="note">
-        <strong>تنبيه:</strong> معلومات من نص القانون، وليست استشارة قانونية. قد لا تكون النصوص محدّثة، فراجع النص الرسمي.
-      </p>
+      <div class="hero">
+        <h1>اسأل نصّ القانون، واحصل على رقم المادة</h1>
+        <p class="lead">إجابات مستندة حصراً إلى نصوص قانون ضريبة الدخل وقانون الضريبة العامة على المبيعات، مع ذكر المادة لكل حكم، ورفض صريح عند عدم توفر الإجابة.</p>
+        <p class="disclaimer" role="note">
+          <strong>تنبيه:</strong> معلومات من نص القانون، وليست استشارة قانونية. قد لا تكون النصوص محدّثة، فراجع النص الرسمي.
+        </p>
+      </div>
 
       <form id="ask-form" class="ask" method="post" novalidate aria-label="اطرح سؤالك">
-        <label class="field-label" for="question">سؤالك</label>
+        <div class="field-header">
+          <label class="field-label" for="question">سؤالك</label>
+          <span class="kbd-hint">للإرسال: <kbd dir="ltr">Ctrl + Enter</kbd></span>
+        </div>
         <p id="privacy-notice" class="privacy" role="note">
           <strong>الخصوصية:</strong> يُرسل سؤالك إلى مزوّدَي ذكاء اصطناعي خارجيين (Google Gemini وOpenRouter)، فلا تكتب فيه بيانات شخصية.
         </p>
-        <textarea id="question" name="question" rows="4" maxlength="1000" required dir="auto"
+        <textarea id="question" name="question" rows="3" maxlength="1000" required dir="auto"
           aria-describedby="privacy-notice question-error"
-          placeholder="مثال: ما هي نسبة الضريبة العامة على المبيعات؟"></textarea>
+          placeholder="مثال: ما هي الإعفاءات الشخصية للمقيم في ضريبة الدخل؟"></textarea>
         <div class="field-meta">
-          <span class="kbd-hint">للإرسال من لوحة المفاتيح: <kbd dir="ltr">Ctrl + Enter</kbd></span>
+          <p id="question-error" class="field-error" hidden></p>
           <span id="question-count" class="count" dir="ltr" aria-hidden="true">0 / 1000</span>
         </div>
-        <p id="question-error" class="field-error" hidden></p>
         <div id="captcha" class="captcha" hidden></div>
 
         <div class="actions">
@@ -75,12 +85,13 @@
         </div>
 
         <div class="examples" role="group" aria-labelledby="examples-title">
-          <p id="examples-title" class="examples-title">أو جرّب أحد هذه الأسئلة:</p>
+          <p id="examples-title" class="examples-title">أو اختر أحد الأسئلة المجربة:</p>
           <div class="examples-list">
             <button type="button" class="example" data-question="ما هي نسبة الضريبة العامة على المبيعات؟">نسبة ضريبة المبيعات العامة</button>
             <button type="button" class="example" data-question="كم يبلغ الإعفاء الشخصي للشخص الطبيعي المقيم في قانون ضريبة الدخل؟">الإعفاء الشخصي في ضريبة الدخل</button>
             <button type="button" class="example" data-question="هل الراتب التقاعدي الشهري معفى من ضريبة الدخل؟">هل الراتب التقاعدي معفى؟</button>
             <button type="button" class="example" data-question="خلال كم يوماً يتم رد ضريبة المبيعات بعد تقديم طلب الرد؟">مدة رد ضريبة المبيعات</button>
+            <button type="button" class="demo-question" data-question="كيف أجدد جواز السفر الأردني؟" data-demo="gate-refusal">سؤال خارج القانونين (تجربة الرفض)</button>
           </div>
         </div>
       </form>
@@ -94,50 +105,73 @@
       </div>
 
       <section id="result" class="result" hidden aria-labelledby="answer-title">
-        <div class="result-head">
-          <h2 id="answer-title" tabindex="-1">الإجابة</h2>
-          <button id="copy-answer" type="button" class="text-button">نسخ الإجابة مع أرقام المواد</button>
-        </div>
-        <p class="result-question">سؤالك: <bdi id="result-question"></bdi></p>
-        <p class="result-question">نطاق البحث: <span id="result-scope"></span></p>
-        <p id="answer" class="answer"></p>
-
-        <div id="refusal" class="refusal" hidden>
-          <h3>لا توجد إجابة في النصوص المتوفرة</h3>
-          <p id="refusal-reason"></p>
-          <p class="refusal-hint">جرّب صياغة أخرى أو كلمات من نص القانون نفسه، أو اختر القانون المعني من «نطاق البحث». تغطي الأداة قانونَي ضريبة الدخل والضريبة العامة على المبيعات فقط.</p>
-        </div>
-
-        <section id="citations-block" class="citations-block" hidden aria-labelledby="citations-title">
-          <h3 id="citations-title">المواد التي استندت إليها الإجابة</h3>
-          <ul id="citations" class="citations"></ul>
-        </section>
-
-        <p id="result-disclaimer" class="result-disclaimer"></p>
-
-        <details id="retrieval-block" class="details">
-          <summary>تفاصيل الاسترجاع</summary>
-          <p id="model" class="details-model"></p>
-          <div class="table-scroll">
-            <table>
-              <caption>أجزاء المواد التي استرجعها البحث، الأقرب أولاً</caption>
-              <thead>
-                <tr>
-                  <th scope="col">القانون</th>
-                  <th scope="col">المادة</th>
-                  <th scope="col">الجزء</th>
-                  <th scope="col">درجة التشابه</th>
-                </tr>
-              </thead>
-              <tbody id="retrieved"></tbody>
-            </table>
+        <div class="result-main">
+          <div id="result-badge" class="result-badge" hidden>
+            <span class="badge-icon" aria-hidden="true">✓</span>
+            <span id="badge-text" class="badge-text">كل مادة مذكورة هنا استُرجعت فعلاً لهذا السؤال</span>
           </div>
-          <p id="dropped" class="details-dropped" hidden></p>
-        </details>
+
+          <div class="result-head">
+            <h2 id="answer-title" tabindex="-1">الإجابة</h2>
+            <button id="copy-answer" type="button" class="text-button">نسخ الإجابة مع أرقام المواد</button>
+          </div>
+
+          <div class="result-echo">
+            <p class="result-question">سؤالك: <bdi id="result-question"></bdi></p>
+            <p class="result-question">نطاق البحث: <span id="result-scope"></span></p>
+          </div>
+
+          <div id="answer" class="answer"></div>
+
+          <div id="refusal" class="refusal" hidden>
+            <h3>لا توجد إجابة في النصوص المتوفرة</h3>
+            <p id="refusal-reason"></p>
+            <p class="refusal-hint">جرّب صياغة أخرى أو كلمات من نص القانون نفسه، أو اختر القانون المعني من «نطاق البحث». تغطي الأداة قانونَي ضريبة الدخل والضريبة العامة على المبيعات فقط.</p>
+          </div>
+
+          <p id="result-disclaimer" class="result-disclaimer"></p>
+        </div>
+
+        <div class="result-evidence">
+          <section id="citations-block" class="citations-block" hidden aria-labelledby="citations-title">
+            <h3 id="citations-title">المواد التي استندت إليها الإجابة</h3>
+            <ul id="citations" class="citations"></ul>
+          </section>
+
+          <details id="retrieval-block" class="details telemetry-block">
+            <summary class="telemetry-summary">
+              <span class="telemetry-title">تفاصيل الاسترجاع الهندسي</span>
+              <span id="telemetry-chips" class="telemetry-chips"></span>
+            </summary>
+            <div class="telemetry-panel">
+              <div id="telemetry-metrics" class="telemetry-metrics"></div>
+              <p id="model" class="details-model" hidden></p>
+              <div class="table-scroll">
+                <table>
+                  <caption>أجزاء المواد التي استرجعها البحث، الأقرب أولاً</caption>
+                  <thead>
+                    <tr>
+                      <th scope="col">القانون</th>
+                      <th scope="col">المادة</th>
+                      <th scope="col">الجزء</th>
+                      <th scope="col">درجة التشابه</th>
+                    </tr>
+                  </thead>
+                  <tbody id="retrieved"></tbody>
+                </table>
+              </div>
+              <p id="dropped" class="details-dropped" hidden></p>
+              <div class="telemetry-actions">
+                <button id="copy-json" type="button" class="text-button">نسخ استجابة JSON الأصلية</button>
+                <span class="telemetry-footnote">القيم أعلاه من استجابة هذا الطلب نفسه، والزمن مقيس في متصفحك.</span>
+              </div>
+            </div>
+          </details>
+        </div>
       </section>
     </main>
 
-    <aside class="about" aria-label="عن الأداة">
+    <section id="about-band" class="about-band" aria-label="عن الأداة">
       <section class="about-section" aria-labelledby="coverage-title">
         <h2 id="coverage-title">النصوص المشمولة</h2>
         <p id="coverage-status" class="muted">جارٍ تحميل قائمة القوانين…</p>
@@ -149,11 +183,8 @@
         <p>لا يجيب النظام من ذاكرة النموذج اللغوي، بل من نصوص المواد نفسها، والشيفرة هي التي تقرر ما يُعرض عليك.</p>
         <ol class="steps">
           <li><strong>البحث:</strong> يُحوَّل سؤالك إلى تمثيل رقمي (<bdi>embedding</bdi>) ويُقارَن بأجزاء مواد القانونين، فتُسترجع أقرب خمسة أجزاء.</li>
-          <li>
-            <strong>بوابة الرفض:</strong> إن كانت أعلى درجة تشابه دون العتبة (0.60)، يُرفض السؤال قبل استدعاء النموذج اللغوي.
-            <button type="button" class="text-button demo-question" data-question="كيف أجدد جواز السفر الأردني؟" data-demo="gate-refusal">جرّب سؤالاً خارج نطاق القانونين</button>
-          </li>
-          <li><strong>الصياغة:</strong> يتلقى النموذج نصوص المواد المسترجعة وحدها، ويعيد إجابة منظمة (<bdi>JSON</bdi>) تذكر المواد التي استند إليها.</li>
+          <li><strong>بوابة الرفض:</strong> إن كانت أعلى درجة تشابه دون العتبة (0.60)، يُرفض السؤال قبل استدعاء النموذج اللغوي.</li>
+          <li><strong>الصياغة:</strong> يتلقى النموذج نصوص المواد المسترجعة وحدها، ويعيد إجابة منظمة تذكر المواد التي استند إليها.</li>
           <li><strong>التحقق:</strong> لا يُقبل استشهاد إلا إذا أشار إلى مادة استُرجعت فعلاً لهذا السؤال، والإجابة التي لا يبقى لها استشهاد صالح تتحول إلى رفض.</li>
         </ol>
         <ul class="links">
@@ -189,7 +220,7 @@
         <h2 id="english-title">In English</h2>
         <p>Arabic question answering over two Jordanian tax laws. Answers come only from the law text, every citation is checked in code against the articles actually retrieved, and the system refuses when the laws do not answer. Not legal advice.</p>
       </section>
-    </aside>
+    </section>
   </div>
 
   <footer class="site-footer">
