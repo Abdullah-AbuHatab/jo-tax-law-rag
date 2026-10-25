@@ -30,6 +30,8 @@ Rules:
    and return no citations. Do not guess.
 6. This is legal information, not legal advice. Do not tell the user what they
    personally should do.
+7. Never include links, URLs, e-mail addresses, phone numbers or other contact details
+   in the answer, even if the question asks for them.
 
 Reply with ONE JSON object and nothing else, in this exact shape:
 {"answer": "<text>", "citations": [{"law_id": "<law_id>", "article": "<article>"}], "refused": false}

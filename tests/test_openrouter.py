@@ -146,3 +146,37 @@ def test_non_json_200_is_bad_response():
 def test_missing_key_is_refused_at_construction():
     with pytest.raises(ValueError, match="OPENROUTER_API_KEY"):
         OpenRouterClient(api_key="", model="m")
+
+
+# ---- round 2: a total deadline, not only per-phase timeouts --------------------------------
+
+
+def test_timeout_seconds_can_only_shorten_the_call():
+    seen = []
+
+    def handler(request):
+        seen.append(request.extensions["timeout"]["read"])
+        return httpx.Response(200, json=ok_payload())
+
+    client = make_client(handler)  # OPENROUTER_TIMEOUT_SECONDS default: 20
+    client.complete(MESSAGES, timeout_seconds=5.0)
+    client.complete(MESSAGES, timeout_seconds=50.0)
+    assert seen == [5.0, 20.0]
+    with pytest.raises(LLMError) as info:
+        client.complete(MESSAGES, timeout_seconds=0)
+    assert info.value.code == LLM_TIMEOUT and len(seen) == 2  # no time left: not even called
+
+
+def test_slow_drip_response_is_cut_at_the_total_deadline():
+    now = [0.0]
+
+    class Drip(httpx.SyncByteStream):
+        def __iter__(self):
+            for part in (b'{"id": "x", ', b'"model": "m", ', b'"choices": []}'):
+                now[0] += 8.0  # each chunk arrives inside the per-read timeout, 24 s in total
+                yield part
+
+    client = make_client(lambda request: httpx.Response(200, stream=Drip()), clock=lambda: now[0])
+    with pytest.raises(LLMError) as info:
+        client.complete(MESSAGES)
+    assert info.value.code == LLM_TIMEOUT and info.value.http_status == 504

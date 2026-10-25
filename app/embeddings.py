@@ -77,6 +77,9 @@ class GeminiEmbedder:
         client: httpx.Client | None = None,
         sleep: Callable[[float], None] = time.sleep,
         jitter: Callable[[], float] = random.random,
+        query_max_attempts: int = 2,
+        query_max_backoff_seconds: float = 2.0,
+        clock: Callable[[], float] = time.monotonic,
     ) -> None:
         self.model = model
         self.dimension = dimension
@@ -88,15 +91,28 @@ class GeminiEmbedder:
         self._client = client or httpx.Client()
         self._sleep = sleep
         self._jitter = jitter
+        self._query_max_attempts = query_max_attempts
+        self._query_max_backoff = query_max_backoff_seconds
+        self._clock = clock
 
     def embed_documents(self, texts: Sequence[str]) -> list[list[float]]:
+        """Ingest path: up to ``max_attempts`` per batch, ``timeout_seconds`` per attempt."""
         vectors: list[list[float]] = []
         for start in range(0, len(texts), self._batch_size):
             vectors.extend(self._embed_batch(texts[start : start + self._batch_size], "RETRIEVAL_DOCUMENT"))
         return vectors
 
     def embed_query(self, text: str) -> list[float]:
-        return self._embed_batch([text], "RETRIEVAL_QUERY")[0]
+        """Request path (one /ask): at most ``query_max_attempts`` (2) calls, short
+        backoff, and ``timeout_seconds`` for all attempts together, not per attempt."""
+        deadline = self._clock() + self._timeout
+        return self._embed_batch(
+            [text],
+            "RETRIEVAL_QUERY",
+            max_attempts=self._query_max_attempts,
+            max_backoff=self._query_max_backoff,
+            deadline=deadline,
+        )[0]
 
     def _request_item(self, text: str, task_type: TaskType) -> dict[str, object]:
         return {
@@ -106,10 +122,17 @@ class GeminiEmbedder:
             "outputDimensionality": self.dimension,
         }
 
-    def _embed_batch(self, texts: Sequence[str], task_type: TaskType) -> list[list[float]]:
+    def _embed_batch(
+        self,
+        texts: Sequence[str],
+        task_type: TaskType,
+        max_attempts: int | None = None,
+        max_backoff: float = 30.0,
+        deadline: float | None = None,
+    ) -> list[list[float]]:
         url = f"{GEMINI_BASE_URL}/models/{self.model}:batchEmbedContents"
         body = {"requests": [self._request_item(t, task_type) for t in texts]}
-        response = self._post_with_retry(url, body)
+        response = self._post_with_retry(url, body, max_attempts or self._max_attempts, max_backoff, deadline)
         try:
             items = response.json()["embeddings"]
             vectors = [[float(v) for v in item["values"]] for item in items]
@@ -122,15 +145,23 @@ class GeminiEmbedder:
                 raise EmbeddingError(f"Gemini returned a {len(vector)}-d vector, expected {self.dimension}")
         return [l2_normalize(v) for v in vectors]
 
-    def _post_with_retry(self, url: str, body: dict[str, object]) -> httpx.Response:
+    def _post_with_retry(
+        self, url: str, body: dict[str, object], max_attempts: int, max_backoff: float, deadline: float | None
+    ) -> httpx.Response:
         if not self._api_key:
             # Checked per call, not at start-up, so the API still starts (and
             # /health, /laws work) when the key is missing; /ask answers 503.
             raise EmbeddingError("GEMINI_API_KEY is not set")
         headers = {"x-goog-api-key": self._api_key, "Content-Type": "application/json"}
-        for attempt in range(1, self._max_attempts + 1):
+        for attempt in range(1, max_attempts + 1):
+            timeout = self._timeout
+            if deadline is not None:
+                remaining = deadline - self._clock()
+                if remaining <= 0:
+                    raise EmbeddingError("Gemini query deadline exceeded")
+                timeout = min(timeout, remaining)
             try:
-                response = self._client.post(url, json=body, headers=headers, timeout=self._timeout)
+                response = self._client.post(url, json=body, headers=headers, timeout=timeout)
             except httpx.TimeoutException as exc:
                 # A timeout may still be a transient failure, but we only retry on
                 # explicit 429/5xx answers: the policy stays simple to reason about.
@@ -144,17 +175,20 @@ class GeminiEmbedder:
                 "gemini embedding call failed",
                 extra={"status": response.status_code, "attempt": attempt, "retryable": retryable},
             )
-            if not retryable or attempt == self._max_attempts:
+            if not retryable or attempt == max_attempts:
                 raise EmbeddingError(f"Gemini returned HTTP {response.status_code}")
-            self._sleep(self._backoff_seconds(attempt, response))
+            pause = self._backoff_seconds(attempt, response, max_backoff)
+            if deadline is not None and self._clock() + pause >= deadline:
+                raise EmbeddingError(f"Gemini returned HTTP {response.status_code}")  # no time left to retry
+            self._sleep(pause)
         raise EmbeddingError("unreachable")  # pragma: no cover
 
-    def _backoff_seconds(self, attempt: int, response: httpx.Response) -> float:
-        """Exponential backoff with full jitter; honour Retry-After when given (capped at 30 s)."""
+    def _backoff_seconds(self, attempt: int, response: httpx.Response, cap: float = 30.0) -> float:
+        """Exponential backoff with full jitter; honour Retry-After when given; never above ``cap``."""
         retry_after = response.headers.get("retry-after", "")
         if retry_after.isdigit():
-            return min(float(retry_after), 30.0)
-        return self._base_backoff * (2 ** (attempt - 1)) * (0.5 + self._jitter() / 2)
+            return min(float(retry_after), cap)
+        return min(self._base_backoff * (2 ** (attempt - 1)) * (0.5 + self._jitter() / 2), cap)
 
 
 class FakeEmbedder:

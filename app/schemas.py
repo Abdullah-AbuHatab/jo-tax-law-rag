@@ -85,6 +85,10 @@ class ArticleOut(BaseModel):
     source_url: str
 
 
+class PublicConfigOut(BaseModel):
+    turnstile_site_key: str | None = Field(description="Cloudflare Turnstile site key; null when Turnstile is off.")
+
+
 class ErrorBody(BaseModel):
     code: str
     message: str

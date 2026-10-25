@@ -100,7 +100,8 @@ def test_retries_on_429_and_5xx_with_backoff(status):
             return httpx.Response(status, json={"error": {"message": "busy"}})
         return embeddings_response(request)
 
-    make_embedder(handler, sleeps=sleeps, base_backoff_seconds=1.0).embed_query("سؤال")
+    # the ingest path (documents) keeps the full retry policy; the query path is capped (below)
+    make_embedder(handler, sleeps=sleeps, base_backoff_seconds=1.0).embed_documents(["نص"])
     assert len(calls) == 3
     # exponential: 1s, 2s, times the jitter factor (0.5 + 0.5/2 = 0.75)
     assert sleeps == [0.75, 1.5]
@@ -117,7 +118,7 @@ def test_retry_after_header_is_honoured_and_capped():
             return httpx.Response(429, headers={"Retry-After": "999"})
         return embeddings_response(request)
 
-    make_embedder(handler, sleeps=sleeps).embed_query("سؤال")
+    make_embedder(handler, sleeps=sleeps).embed_documents(["نص"])
     assert sleeps == [7.0, 30.0]
 
 
@@ -142,7 +143,7 @@ def test_gives_up_after_max_attempts():
         return httpx.Response(503)
 
     with pytest.raises(EmbeddingError, match="HTTP 503"):
-        make_embedder(handler, max_attempts=4).embed_query("سؤال")
+        make_embedder(handler, max_attempts=4).embed_documents(["نص"])
     assert len(calls) == 4
 
 
@@ -183,3 +184,76 @@ def test_fake_embedder_is_deterministic_and_normalized():
     assert a == FakeEmbedder().embed_query("نسبة الضريبة العامة")
     assert math.isclose(math.sqrt(sum(v * v for v in a)), 1.0)
     assert len(a) == DIM
+
+
+# ---- round 2: the query path (one /ask) is cheap and bounded ---------------------------
+
+
+def test_query_embedding_makes_at_most_two_attempts():
+    calls = []
+
+    def handler(request):
+        calls.append(1)
+        return httpx.Response(503)
+
+    embedder = make_embedder(handler, max_attempts=4)
+    with pytest.raises(EmbeddingError, match="HTTP 503"):
+        embedder.embed_query("سؤال")
+    assert len(calls) == 2
+    calls.clear()
+    with pytest.raises(EmbeddingError):
+        embedder.embed_documents(["نص"])  # ingest keeps 4
+    assert len(calls) == 4
+
+
+def test_query_retry_after_is_capped_to_two_seconds():
+    calls, sleeps = [], []
+
+    def handler(request):
+        calls.append(1)
+        if len(calls) == 1:
+            return httpx.Response(429, headers={"Retry-After": "999"})
+        return embeddings_response(request)
+
+    make_embedder(handler, sleeps=sleeps).embed_query("سؤال")
+    assert sleeps == [2.0]
+
+
+def test_query_embedding_has_a_total_deadline():
+    now = [0.0]
+    seen_timeouts, calls = [], []
+
+    def handler(request):
+        calls.append(1)
+        seen_timeouts.append(request.extensions["timeout"]["read"])
+        now[0] += 10.0  # each attempt takes 10 s
+        return httpx.Response(503)
+
+    def sleep(seconds):
+        now[0] += seconds
+
+    embedder = GeminiEmbedder(
+        api_key="test-key",
+        timeout_seconds=15.0,
+        client=httpx.Client(transport=httpx.MockTransport(handler)),
+        sleep=sleep,
+        jitter=lambda: 0.5,
+        clock=lambda: now[0],
+    )
+    with pytest.raises(EmbeddingError):
+        embedder.embed_query("سؤال")
+    # attempt 1 may use the full 15 s; attempt 2 only what is left (15 - 10 - 0.75 backoff)
+    assert seen_timeouts == [15.0, pytest.approx(4.25)]
+    assert now[0] <= 15.0 + 10.0  # the mock ignores timeouts; a real call would stop at the deadline
+
+    now[0], calls[:] = 0.0, []
+
+    def slow_handler(request):
+        calls.append(1)
+        now[0] += 16.0  # the first attempt alone used the whole budget
+        return httpx.Response(503)
+
+    embedder._client = httpx.Client(transport=httpx.MockTransport(slow_handler))
+    with pytest.raises(EmbeddingError):
+        embedder.embed_query("سؤال")
+    assert len(calls) == 1  # no time left: no second attempt

@@ -15,6 +15,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Protocol
@@ -67,7 +68,9 @@ class Completion:
 
 
 class LLMClient(Protocol):
-    def complete(self, messages: Sequence[Message]) -> Completion: ...
+    def complete(self, messages: Sequence[Message], timeout_seconds: float | None = None) -> Completion:
+        """``timeout_seconds`` (when given) caps this call's total wall-clock time."""
+        ...
 
 
 class OpenRouterClient:
@@ -82,6 +85,7 @@ class OpenRouterClient:
         app_url: str = "",
         app_title: str = "",
         client: httpx.Client | None = None,
+        clock: Callable[[], float] = time.monotonic,
     ) -> None:
         if not api_key:
             raise ValueError("OPENROUTER_API_KEY is not set")
@@ -93,6 +97,7 @@ class OpenRouterClient:
         self._app_url = app_url
         self._app_title = app_title
         self._client = client or httpx.Client()
+        self._clock = clock
 
     def request_body(self, messages: Sequence[Message]) -> dict[str, object]:
         body: dict[str, object] = {
@@ -110,35 +115,52 @@ class OpenRouterClient:
             body["reasoning"] = {"effort": self._reasoning_effort, "exclude": True}
         return body
 
-    def complete(self, messages: Sequence[Message]) -> Completion:
+    def complete(self, messages: Sequence[Message], timeout_seconds: float | None = None) -> Completion:
+        """One chat completion within a total deadline.
+
+        The deadline is ``timeout_seconds`` capped by OPENROUTER_TIMEOUT_SECONDS. httpx
+        timeouts apply per phase (connect, each read), so the body is read in chunks and
+        the wall clock is checked between them: a reply that trickles in slowly cannot
+        hold the request (and a concurrency slot) past the deadline.
+        """
+        budget = self._timeout if timeout_seconds is None else min(self._timeout, timeout_seconds)
+        if budget <= 0:
+            raise LLMError(LLM_TIMEOUT, 504)
+        deadline = self._clock() + budget
         headers = {"Authorization": f"Bearer {self._api_key}", "Content-Type": "application/json"}
         if self._app_url:
             headers["HTTP-Referer"] = self._app_url
         if self._app_title:
             headers["X-Title"] = self._app_title
         try:
-            response = self._client.post(
-                OPENROUTER_URL, json=self.request_body(messages), headers=headers, timeout=self._timeout
-            )
+            with self._client.stream(
+                "POST", OPENROUTER_URL, json=self.request_body(messages), headers=headers, timeout=budget
+            ) as response:
+                chunks: list[bytes] = []
+                for chunk in response.iter_bytes():
+                    chunks.append(chunk)
+                    if self._clock() > deadline:
+                        raise LLMError(LLM_TIMEOUT, 504)
+                status = response.status_code
         except httpx.TimeoutException as exc:
             raise LLMError(LLM_TIMEOUT, 504) from exc
         except httpx.HTTPError as exc:
             logger.warning("openrouter request failed", extra={"error_type": type(exc).__name__})
             raise LLMError(LLM_UNAVAILABLE, 503) from exc
 
-        payload = self._json_or_none(response)
-        if response.status_code != 200:
+        payload = self._json_or_none(b"".join(chunks))
+        if status != 200:
             logger.warning(
                 "openrouter returned an error",
-                extra={"status": response.status_code, "upstream_code": self._upstream_code(payload)},
+                extra={"status": status, "upstream_code": self._upstream_code(payload)},
             )
-            raise map_status_to_error(response.status_code)
+            raise map_status_to_error(status)
         return self._parse_completion(payload)
 
     @staticmethod
-    def _json_or_none(response: httpx.Response) -> object:
+    def _json_or_none(body: bytes) -> object:
         try:
-            return response.json()
+            return json.loads(body)
         except (json.JSONDecodeError, ValueError):
             return None
 
@@ -178,9 +200,11 @@ class FakeLLM:
         self._responder = responder or self._default_reply
         self.model = model
         self.calls: list[Sequence[Message]] = []
+        self.timeouts: list[float | None] = []  # the timeout_seconds each call got
 
-    def complete(self, messages: Sequence[Message]) -> Completion:
+    def complete(self, messages: Sequence[Message], timeout_seconds: float | None = None) -> Completion:
         self.calls.append(messages)
+        self.timeouts.append(timeout_seconds)
         return Completion(content=self._responder(messages), model=self.model)
 
     @staticmethod

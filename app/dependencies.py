@@ -44,6 +44,7 @@ def build_database(settings: Settings) -> Database:
         settings.database_url.get_secret_value(),
         connect_timeout_seconds=settings.db_connect_timeout_seconds,
         pool_max_size=settings.db_pool_max_size,
+        run_migrations=settings.run_migrations,
     )
 
 
