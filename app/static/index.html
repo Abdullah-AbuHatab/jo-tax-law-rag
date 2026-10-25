@@ -33,70 +33,45 @@
           <li><a href="https://github.com/Abdullah-AbuHatab/jo-tax-law-rag">الشيفرة على GitHub</a></li>
           <li><a href="/docs">توثيق الواجهة البرمجية</a></li>
         </ul>
-        <button id="theme-toggle" class="theme-toggle" type="button" aria-label="تبديل المظهر">
-          <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false">
-            <path d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707m12.728 0l-.707-.707M6.343 6.343l-.707-.707M12 8a4 4 0 100 8 4 4 0 000-8z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-          </svg>
-          <span id="theme-label">المظهر</span>
-        </button>
       </nav>
     </div>
   </header>
 
   <div class="container layout">
     <main class="workspace">
-      <div class="trust-ribbon" role="region" aria-label="مواصفات النظام الموثقة">
-        <span class="trust-badge">160 مادة قانونية</span>
-        <span class="trust-sep">·</span>
-        <span class="trust-badge">بوابة رفض دلالي (0.60)</span>
-        <span class="trust-sep">·</span>
-        <span class="trust-badge trust-badge-gold">تحقق برمجي 100%</span>
-        <span class="trust-sep">·</span>
-        <span class="trust-badge">دقة استرجاع 96.2%</span>
-      </div>
-
       <h1>اسأل نصّ القانون، واحصل على رقم المادة</h1>
       <p class="lead">إجابات من نص قانون ضريبة الدخل وقانون الضريبة العامة على المبيعات فقط. تذكر كل إجابة المادة التي استندت إليها، وإن لم يُجب النص عن سؤالك تقول الأداة ذلك صراحة.</p>
 
       <p class="disclaimer" role="note">
-        <strong>تنبيه:</strong> هذه أداة معلومات وليست استشارة قانونية. قد تكون النصوص غير محدثة،
-        فراجع النص الرسمي أو مختصاً قبل الاعتماد على أي إجابة.
+        <strong>تنبيه:</strong> معلومات من نص القانون، وليست استشارة قانونية. قد لا تكون النصوص محدّثة، فراجع النص الرسمي.
       </p>
 
-      <form id="ask-form" class="ask" novalidate aria-label="اطرح سؤالك">
-        <div class="field-header">
-          <label class="field-label" for="question">سؤالك</label>
-        </div>
-
-        <div id="law-pills" class="law-pills" role="tablist" aria-label="اختر القانون">
-          <button type="button" class="law-pill" role="tab" aria-selected="true" data-value="">القانونان كلاهما</button>
-          <button type="button" class="law-pill" role="tab" aria-selected="false" data-value="income_tax_34_2014">ضريبة الدخل (34/2014)</button>
-          <button type="button" class="law-pill" role="tab" aria-selected="false" data-value="sales_tax_6_1994">ضريبة المبيعات (6/1994)</button>
-        </div>
-
+      <form id="ask-form" class="ask" method="post" novalidate aria-label="اطرح سؤالك">
+        <label class="field-label" for="question">سؤالك</label>
         <p id="privacy-notice" class="privacy" role="note">
-          <strong>الخصوصية:</strong> يُرسل نص سؤالك إلى مزوّدي ذكاء اصطناعي خارجيين (Google Gemini وOpenRouter)
-          لمعالجته، فلا تكتب فيه أي بيانات شخصية كالاسم أو الرقم الوطني أو أرقام الحسابات.
+          <strong>الخصوصية:</strong> يُرسل سؤالك إلى مزوّدَي ذكاء اصطناعي خارجيين (Google Gemini وOpenRouter)، فلا تكتب فيه بيانات شخصية.
         </p>
         <textarea id="question" name="question" rows="4" maxlength="1000" required dir="auto"
           aria-describedby="privacy-notice question-error"
           placeholder="مثال: ما هي نسبة الضريبة العامة على المبيعات؟"></textarea>
         <div class="field-meta">
           <span class="kbd-hint">للإرسال من لوحة المفاتيح: <kbd dir="ltr">Ctrl + Enter</kbd></span>
-          <button id="clear-question" type="button" class="button-clear" hidden>مسح السؤال</button>
           <span id="question-count" class="count" dir="ltr" aria-hidden="true">0 / 1000</span>
         </div>
         <p id="question-error" class="field-error" hidden></p>
         <div id="captcha" class="captcha" hidden></div>
 
         <div class="actions">
-          <div class="field">
-            <label class="field-label" for="law">القانون المختار</label>
-            <select id="law" name="law">
-              <option value="">القانونان كلاهما</option>
-            </select>
-          </div>
-          <button id="submit" class="button-primary" type="submit">اسأل</button>
+          <fieldset id="scope" class="scope">
+            <legend class="scope-legend">نطاق البحث</legend>
+            <div id="scope-options" class="scope-options">
+              <label class="scope-option">
+                <input type="radio" id="scope-all" name="law" value="" checked>
+                <span>القانونان كلاهما</span>
+              </label>
+            </div>
+          </fieldset>
+          <button id="submit" class="button-primary" type="submit" disabled>اسأل</button>
         </div>
 
         <div class="examples" role="group" aria-labelledby="examples-title">
@@ -106,75 +81,31 @@
             <button type="button" class="example" data-question="كم يبلغ الإعفاء الشخصي للشخص الطبيعي المقيم في قانون ضريبة الدخل؟">الإعفاء الشخصي في ضريبة الدخل</button>
             <button type="button" class="example" data-question="هل الراتب التقاعدي الشهري معفى من ضريبة الدخل؟">هل الراتب التقاعدي معفى؟</button>
             <button type="button" class="example" data-question="خلال كم يوماً يتم رد ضريبة المبيعات بعد تقديم طلب الرد؟">مدة رد ضريبة المبيعات</button>
-            <button type="button" class="guardrail-chip" data-question="ما هي عقوبة السرقة في قانون العقوبات الأردني؟">اختبر بوابة الرفض: سؤال خارج الضرائب</button>
           </div>
         </div>
       </form>
-
-      <div id="recent-container" class="recent-container" hidden>
-        <div class="recent-asks">
-          <span class="recent-asks-title">سجل الجلسة:</span>
-          <div id="recent-chips" class="recent-chips"></div>
-        </div>
-      </div>
 
       <div id="status-area" class="status-area" data-state="idle">
         <div id="status" class="status" role="status" aria-live="polite" aria-atomic="true"></div>
         <div id="progress" class="progress" hidden>
           <div class="progress-track" aria-hidden="true"><div class="progress-bar"></div></div>
           <p class="progress-time" aria-hidden="true">الوقت المنقضي: <span id="progress-elapsed" dir="ltr">0:00</span></p>
-          <ol id="pipeline-steps" class="pipeline-steps" aria-label="مراحل معالجة السؤال">
-            <li class="pipeline-step" data-step="1" data-state="pending">
-              <span class="step-indicator">1</span>
-              <span>التمثيل الرقمي (Gemini Embedding) والبحث في 160 مادة</span>
-            </li>
-            <li class="pipeline-step" data-step="2" data-state="pending">
-              <span class="step-indicator">2</span>
-              <span>فحص بوابة العتبة الدلالية (الحد الأدنى للتشابه 0.60)</span>
-            </li>
-            <li class="pipeline-step" data-step="3" data-state="pending">
-              <span class="step-indicator">3</span>
-              <span>صياغة الإجابة المقيدة بنصوص المواد القانونية فقط</span>
-            </li>
-            <li class="pipeline-step" data-step="4" data-state="pending">
-              <span class="step-indicator">4</span>
-              <span>التحقق البرمجي من مطابقة الاستشهادات وتنقية المخرجات</span>
-            </li>
-          </ol>
         </div>
       </div>
 
       <section id="result" class="result" hidden aria-labelledby="answer-title">
-        <div class="result-toolbar">
-          <div class="result-badges">
-            <span id="badge-status" class="badge-verified">موثق بنصوص المواد</span>
-            <span id="badge-time" class="muted num" dir="ltr"></span>
-          </div>
-          <div class="result-actions">
-            <button id="copy-answer" class="btn-action" type="button" aria-label="نسخ الإجابة مع المراجع">
-              <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" focusable="false">
-                <path d="M8 4v12a2 2 0 002 2h8a2 2 0 002-2V7.242a2 2 0 00-.586-1.414l-2.828-2.828A2 2 0 0015.172 2H10a2 2 0 00-2 2z" fill="none" stroke="currentColor" stroke-width="2"/>
-                <path d="M16 18v2a2 2 0 01-2 2H6a2 2 0 01-2-2V8a2 2 0 012-2h2" fill="none" stroke="currentColor" stroke-width="2"/>
-              </svg>
-              <span id="copy-text">نسخ الإجابة</span>
-            </button>
-            <button id="share-link" class="btn-action" type="button" aria-label="مشاركة رابط السؤال">
-              <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" focusable="false">
-                <path d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" fill="none" stroke="currentColor" stroke-width="2"/>
-              </svg>
-              <span id="share-text">مشاركة الرابط</span>
-            </button>
-          </div>
+        <div class="result-head">
+          <h2 id="answer-title" tabindex="-1">الإجابة</h2>
+          <button id="copy-answer" type="button" class="text-button">نسخ الإجابة مع أرقام المواد</button>
         </div>
-
-        <h2 id="answer-title" tabindex="-1">الإجابة</h2>
         <p class="result-question">سؤالك: <bdi id="result-question"></bdi></p>
+        <p class="result-question">نطاق البحث: <span id="result-scope"></span></p>
         <p id="answer" class="answer"></p>
 
         <div id="refusal" class="refusal" hidden>
           <h3>لا توجد إجابة في النصوص المتوفرة</h3>
           <p id="refusal-reason"></p>
-          <p class="refusal-hint">جرّب صياغة أخرى أو كلمات من نص القانون نفسه، أو اختر القانون المعني من القائمة. تغطي الأداة قانونَي ضريبة الدخل والضريبة العامة على المبيعات فقط.</p>
+          <p class="refusal-hint">جرّب صياغة أخرى أو كلمات من نص القانون نفسه، أو اختر القانون المعني من «نطاق البحث». تغطي الأداة قانونَي ضريبة الدخل والضريبة العامة على المبيعات فقط.</p>
         </div>
 
         <section id="citations-block" class="citations-block" hidden aria-labelledby="citations-title">
@@ -218,7 +149,10 @@
         <p>لا يجيب النظام من ذاكرة النموذج اللغوي، بل من نصوص المواد نفسها، والشيفرة هي التي تقرر ما يُعرض عليك.</p>
         <ol class="steps">
           <li><strong>البحث:</strong> يُحوَّل سؤالك إلى تمثيل رقمي (<bdi>embedding</bdi>) ويُقارَن بأجزاء مواد القانونين، فتُسترجع أقرب خمسة أجزاء.</li>
-          <li><strong>بوابة الرفض:</strong> إن كانت أعلى درجة تشابه دون العتبة (0.60)، يُرفض السؤال قبل استدعاء النموذج اللغوي.</li>
+          <li>
+            <strong>بوابة الرفض:</strong> إن كانت أعلى درجة تشابه دون العتبة (0.60)، يُرفض السؤال قبل استدعاء النموذج اللغوي.
+            <button type="button" class="text-button demo-question" data-question="كيف أجدد جواز السفر الأردني؟" data-demo="gate-refusal">جرّب سؤالاً خارج نطاق القانونين</button>
+          </li>
           <li><strong>الصياغة:</strong> يتلقى النموذج نصوص المواد المسترجعة وحدها، ويعيد إجابة منظمة (<bdi>JSON</bdi>) تذكر المواد التي استند إليها.</li>
           <li><strong>التحقق:</strong> لا يُقبل استشهاد إلا إذا أشار إلى مادة استُرجعت فعلاً لهذا السؤال، والإجابة التي لا يبقى لها استشهاد صالح تتحول إلى رفض.</li>
         </ol>
@@ -228,45 +162,32 @@
         </ul>
       </section>
 
-      <section id="eval-section" class="about-section" aria-labelledby="eval-title">
-        <h2 id="eval-title">التقييم ومعدلات الدقة</h2>
+      <section class="about-section" aria-labelledby="eval-title">
+        <h2 id="eval-title">التقييم</h2>
         <table class="eval-table">
-          <caption>تشغيل حقيقي على 32 سؤالاً عربياً: 26 لها إجابة في القانونين، و6 خارج نطاقهما منها محاولة حقن تعليمات.</caption>
+          <caption>تشغيل حقيقي بتاريخ 2026-10-24 على 32 سؤالاً عربياً: 26 لها إجابة في القانونين، و6 خارج نطاقهما منها محاولة حقن تعليمات.</caption>
           <tbody>
             <tr>
-              <th scope="row">
-                استرجاع المادة الصحيحة (<bdi>recall@5</bdi>)
-                <span class="eval-note">المادة المتوقعة ضمن أول خمس نتائج في 25 من 26 سؤالاً.</span>
-                <meter class="score-meter" min="0" max="100" value="96.2" low="60" high="80" optimum="95" aria-hidden="true"></meter>
-              </th>
+              <th scope="row">استرجاع المادة الصحيحة <span class="eval-note">المادة المتوقعة ضمن أول خمس نتائج في 25 من 26 سؤالاً (<bdi>recall@5</bdi>).</span></th>
               <td><bdi>96.2%</bdi></td>
             </tr>
             <tr>
-              <th scope="row">
-                دقة الرفض (<bdi>refusal accuracy</bdi>)
-                <span class="eval-note">رُفضت الأسئلة الستة خارج النطاق، ولم يُرفض أي سؤال له إجابة.</span>
-                <meter class="score-meter" min="0" max="100" value="100" low="60" high="80" optimum="95" aria-hidden="true"></meter>
-              </th>
+              <th scope="row">دقة الرفض <span class="eval-note">رُفضت الأسئلة الستة خارج النطاق، ولم يُرفض أي سؤال له إجابة.</span></th>
               <td><bdi>100%</bdi></td>
             </tr>
             <tr>
-              <th scope="row">
-                صلاحية الاستشهادات (<bdi>citation validity</bdi>)
-                <span class="eval-note">لم يُستبعد عند التحقق أي استشهاد اقترحه النموذج.</span>
-                <meter class="score-meter" min="0" max="100" value="100" low="60" high="80" optimum="95" aria-hidden="true"></meter>
-              </th>
+              <th scope="row">صلاحية الاستشهادات <span class="eval-note">لم يُستبعد عند التحقق أي استشهاد اقترحه النموذج.</span></th>
               <td><bdi>100%</bdi></td>
             </tr>
           </tbody>
         </table>
-        <p class="muted">32 سؤالاً عيّنة مرجعية، تصف هذه المجموعة المحددة بدقة مثبتة.</p>
+        <p class="muted">32 سؤالاً عيّنة صغيرة، فهذه الأرقام تصف هذه المجموعة وحدها ولا تضمن صحة كل إجابة.</p>
         <p><a class="standalone-link" href="https://github.com/Abdullah-AbuHatab/jo-tax-law-rag/blob/main/eval/results.md">النتائج الكاملة لكل سؤال</a></p>
       </section>
 
       <section class="about-section in-english" lang="en" dir="ltr" aria-labelledby="english-title">
-        <h2 id="english-title">Architecture & Security</h2>
-        <p>Production-hardened Arabic RAG service over Jordanian tax statutes. Questions are embedded with Gemini (768-d) and retrieved via Neon pgvector HNSW. Queries scoring below the 0.60 cosine threshold are deterministically refused before invoking the LLM.</p>
-        <p>Answers are synthesized under strict statutory constraints with zero hallucinated references. Protected by per-client rate limits, daily cost budgets, least-privilege SELECT-only DB credentials, and strict Content Security Policy.</p>
+        <h2 id="english-title">In English</h2>
+        <p>Arabic question answering over two Jordanian tax laws. Answers come only from the law text, every citation is checked in code against the articles actually retrieved, and the system refuses when the laws do not answer. Not legal advice.</p>
       </section>
     </aside>
   </div>
@@ -277,10 +198,11 @@
     </div>
   </footer>
 
-  <dialog id="article-dialog" class="sheet" closedby="any" aria-labelledby="article-title">
+  <dialog id="article-dialog" class="sheet" aria-labelledby="article-title">
     <div class="sheet-head">
       <div>
         <p id="article-law" class="sheet-law"></p>
+        <p id="article-version" class="sheet-version"></p>
         <h2 id="article-title">نص المادة</h2>
       </div>
       <button id="close-article" type="button" class="icon-button" aria-label="إغلاق نص المادة">
@@ -288,6 +210,12 @@
           <path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
         </svg>
       </button>
+      <nav class="sheet-nav" aria-label="التنقل بين المواد">
+        <button id="article-prev" type="button" class="text-button">السابقة</button>
+        <label for="article-jump" class="visually-hidden">انتقل إلى مادة</label>
+        <select id="article-jump" hidden></select>
+        <button id="article-next" type="button" class="text-button">التالية</button>
+      </nav>
     </div>
     <div class="sheet-body">
       <p id="article-status" class="sheet-status" role="status"></p>
@@ -298,17 +226,6 @@
       </section>
     </div>
     <div class="sheet-foot">
-      <div class="sheet-nav">
-        <div class="sheet-nav-actions">
-          <button id="article-prev" type="button" class="btn-action">المادة السابقة</button>
-          <button id="article-next" type="button" class="btn-action">المادة التالية</button>
-        </div>
-        <form id="article-jump-form" class="jump-form" novalidate>
-          <label for="jump-number" class="visually-hidden">رقم المادة</label>
-          <input id="jump-number" type="text" class="jump-input" placeholder="رقم" maxlength="8" dir="ltr">
-          <button type="submit" class="btn-action">انتقل</button>
-        </form>
-      </div>
       <a id="article-source" href="#" hidden target="_blank" rel="noopener noreferrer">النص الرسمي على موقع دائرة ضريبة الدخل والمبيعات (ملف خارجي)</a>
     </div>
   </dialog>

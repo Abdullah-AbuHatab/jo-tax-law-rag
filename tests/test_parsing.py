@@ -126,3 +126,32 @@ def test_duplicate_article_is_an_error():
 def test_missing_header_is_an_error():
     with pytest.raises(ValueError, match="law_id"):
         parse_law_text("المادة (1)\nنص\n")
+
+
+def _keys(pair):
+    return tuple(article.key if article else None for article in pair)
+
+
+def test_law_neighbours_follow_document_order(laws):
+    sales, income = laws["sales_tax_6_1994"], laws["income_tax_34_2014"]
+    assert _keys(sales.neighbours("4")) == ("3", "4bis")
+    assert _keys(sales.neighbours("4bis")) == ("4", "5")
+    assert _keys(sales.neighbours("77")) == ("76", None)
+    assert _keys(income.neighbours("1")) == (None, "2")
+    assert _keys(income.neighbours("82")) == ("81", None)
+    with pytest.raises(KeyError):
+        sales.neighbours("78")
+
+
+def test_parse_law_text_reads_optional_arabic_metadata():
+    law = parse_law_text(HEADER + "# version_ar: نص تجريبي موحّد\n\nالمادة (1)\nنص المادة.\n")
+    assert law.version_ar == "نص تجريبي موحّد"
+    assert law.coverage_note_ar == ""
+
+
+def test_clean_files_carry_arabic_version_labels(laws):
+    income, sales = laws["income_tax_34_2014"], laws["sales_tax_6_1994"]
+    assert income.version_ar == "نص موحّد يشمل تعديلات القانون المعدّل رقم (38) لسنة 2018"
+    assert sales.version_ar == "النص الموحّد المنشور على موقع دائرة ضريبة الدخل والمبيعات بتاريخ أيلول 2022"
+    assert sales.coverage_note_ar == "لا تشمل هذه النصوص الجداول الملحقة بالقانون."
+    assert income.coverage_note_ar == ""

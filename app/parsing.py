@@ -118,9 +118,20 @@ class Law:
     version: str
     retrieved: str
     articles: tuple[Article, ...] = field(default=())
+    version_ar: str = ""
+    coverage_note_ar: str = ""
 
     def article(self, key: str) -> Article | None:
         return next((a for a in self.articles if a.key == key), None)
+
+    def neighbours(self, key: str) -> tuple[Article | None, Article | None]:
+        keys = [a.key for a in self.articles]
+        if key not in keys:
+            raise KeyError(f"unknown article key {key} in {self.law_id}")
+        idx = keys.index(key)
+        prev_article = self.articles[idx - 1] if idx > 0 else None
+        next_article = self.articles[idx + 1] if idx + 1 < len(self.articles) else None
+        return (prev_article, next_article)
 
 
 def parse_law_text(text: str) -> Law:
@@ -181,6 +192,8 @@ def parse_law_text(text: str) -> Law:
         version=meta.get("version", ""),
         retrieved=meta.get("retrieved", ""),
         articles=tuple(articles),
+        version_ar=meta.get("version_ar", ""),
+        coverage_note_ar=meta.get("coverage_note_ar", ""),
     )
 
 

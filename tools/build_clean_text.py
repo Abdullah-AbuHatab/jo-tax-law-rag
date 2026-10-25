@@ -117,6 +117,7 @@ INCOME_META = {
     "%D9%84%D8%B3%D9%86%D8%A9_2014_%D9%88%D8%AA%D8%B9%D8%AF%D9%8A%D9%84%D8%A7%D8%AA%D9%87.docx",
     "source_file": "data/raw/income_tax_34_2014_istd.docx",
     "version": "ISTD consolidated text: Law No. 34 of 2014 as amended by Law No. 38 of 2018",
+    "version_ar": "نص موحّد يشمل تعديلات القانون المعدّل رقم (38) لسنة 2018",
 }
 SALES_META = {
     "law_id": "sales_tax_6_1994",
@@ -131,6 +132,8 @@ SALES_META = {
     "%D9%88%D8%AA%D8%B9%D8%AF%D9%8A%D9%84%D8%A7%D8%AA%D9%87_%D8%A7%D9%8A%D9%84%D9%88%D9%84_2022.pdf",
     "source_file": "data/raw/sales_tax_6_1994_istd_consolidated_2022-09.pdf",
     "version": "ISTD consolidated text dated September 2022 (includes amending Law No. 15 of 2022)",
+    "version_ar": "النص الموحّد المنشور على موقع دائرة ضريبة الدخل والمبيعات بتاريخ أيلول 2022",
+    "coverage_note_ar": "لا تشمل هذه النصوص الجداول الملحقة بالقانون.",
 }
 
 

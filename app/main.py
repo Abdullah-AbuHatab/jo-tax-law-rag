@@ -46,6 +46,7 @@ from app.parsing import Law, load_laws, normalize_article_ref
 from app.rate_limit import ClientIpSettings, SlidingWindowRateLimiter, client_ip, client_key, client_network
 from app.schemas import (
     ArticleOut,
+    ArticleSummaryOut,
     AskRequest,
     AskResponse,
     CitationOut,
@@ -555,9 +556,19 @@ def create_app(
                 source_url=law.source_url,
                 retrieved=law.retrieved,
                 article_count=len(law.articles),
+                version_ar=law.version_ar,
+                coverage_note_ar=law.coverage_note_ar,
             )
             for law in laws.values()
         ]
+
+    @app.get("/laws/{law_id}/articles", response_model=list[ArticleSummaryOut], tags=["laws"])
+    def list_articles(law_id: str) -> list[ArticleSummaryOut]:
+        """Article keys and printed labels in document order for one law."""
+        law = laws.get(law_id)
+        if law is None:
+            raise HTTPException(status_code=404)
+        return [ArticleSummaryOut(article=a.key, article_label=a.label) for a in law.articles]
 
     @app.get("/laws/{law_id}/articles/{n}", response_model=ArticleOut, tags=["laws"])
     def get_article(law_id: str, n: str) -> ArticleOut:
@@ -567,6 +578,7 @@ def create_app(
         article = law.article(key) if law and key else None
         if law is None or article is None:
             raise HTTPException(status_code=404)
+        prev_a, next_a = law.neighbours(article.key)
         return ArticleOut(
             law_id=law.law_id,
             law_name=law.name,
@@ -575,6 +587,10 @@ def create_app(
             text=article.text,
             notes=list(article.notes),
             source_url=law.source_url,
+            prev_article=prev_a.key if prev_a else None,
+            prev_article_label=prev_a.label if prev_a else None,
+            next_article=next_a.key if next_a else None,
+            next_article_label=next_a.label if next_a else None,
         )
 
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
