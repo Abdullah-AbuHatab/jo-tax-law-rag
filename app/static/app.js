@@ -74,7 +74,32 @@ class ApiError extends Error {
   }
 }
 
-// ---- HTTP -----------------------------------------------------------------
+// ---- Theme Management --------------------------------------------------------
+
+function initTheme() {
+  const saved = localStorage.getItem("theme");
+  const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+  const active = saved || (prefersDark ? "dark" : "light");
+  applyTheme(active);
+
+  const toggle = $("theme-toggle");
+  if (toggle) {
+    toggle.addEventListener("click", () => {
+      const current = document.documentElement.getAttribute("data-theme") || (prefersDark ? "dark" : "light");
+      const next = current === "dark" ? "light" : "dark";
+      localStorage.setItem("theme", next);
+      applyTheme(next);
+    });
+  }
+}
+
+function applyTheme(theme) {
+  document.documentElement.setAttribute("data-theme", theme);
+  const label = $("theme-label");
+  if (label) {
+    label.textContent = theme === "dark" ? "النهاري" : "الليلي";
+  }
+}
 
 // Retry-After in whole seconds; 0 when absent or not a plain number.
 function retryAfterSeconds(response) {
@@ -204,6 +229,39 @@ async function loadLaws() {
   }
 }
 
+function initLawPills() {
+  const pills = document.querySelectorAll(".law-pill");
+  const select = $("law");
+  pills.forEach((pill) => {
+    pill.addEventListener("click", () => {
+      const val = pill.dataset.value || "";
+      if (select) {
+        select.value = val;
+      }
+      pills.forEach((p) => p.setAttribute("aria-selected", p === pill ? "true" : "false"));
+    });
+  });
+  if (select) {
+    select.addEventListener("change", () => {
+      pills.forEach((p) => p.setAttribute("aria-selected", p.dataset.value === select.value ? "true" : "false"));
+    });
+  }
+}
+
+function initClearButton() {
+  const clearBtn = $("clear-question");
+  const textarea = $("question");
+  if (!clearBtn || !textarea) return;
+
+  clearBtn.addEventListener("click", () => {
+    textarea.value = "";
+    updateCount();
+    showFieldError("");
+    clearBtn.hidden = true;
+    textarea.focus();
+  });
+}
+
 // ---- status and progress ---------------------------------------------------
 
 let progressTimer = 0;
@@ -227,9 +285,34 @@ function elapsedSeconds() {
   return Math.floor((Date.now() - progressStartedAt) / TICK_MS);
 }
 
+function updatePipelineSteps(elapsed) {
+  const steps = document.querySelectorAll(".pipeline-step");
+  if (!steps.length) return;
+
+  // 1: 0-3s, 2: 3-6s, 3: 6-22s, 4: >22s (or on arrival)
+  let activeIndex = 1;
+  if (elapsed >= 22) activeIndex = 4;
+  else if (elapsed >= 6) activeIndex = 3;
+  else if (elapsed >= 3) activeIndex = 2;
+
+  steps.forEach((step) => {
+    const num = Number(step.dataset.step);
+    if (num < activeIndex) step.dataset.state = "done";
+    else if (num === activeIndex) step.dataset.state = "active";
+    else step.dataset.state = "pending";
+  });
+}
+
+function resetPipelineSteps(allDone = false) {
+  document.querySelectorAll(".pipeline-step").forEach((step) => {
+    step.dataset.state = allDone ? "done" : "pending";
+  });
+}
+
 function tickProgress() {
   const elapsed = elapsedSeconds();
   $("progress-elapsed").textContent = clockText(elapsed);
+  updatePipelineSteps(elapsed);
   if (!slowNoticeShown && elapsed >= SLOW_AFTER_SECONDS) {
     slowNoticeShown = true;
     setStatus("loading", LOADING_TITLE, SLOW_TEXT);
@@ -241,6 +324,8 @@ function startProgress() {
   slowNoticeShown = false;
   setStatus("loading", LOADING_TITLE, LOADING_TEXT);
   $("progress-elapsed").textContent = clockText(0);
+  resetPipelineSteps(false);
+  updatePipelineSteps(0);
   $("progress").hidden = false;
   clearInterval(progressTimer);
   progressTimer = setInterval(tickProgress, TICK_MS);
@@ -249,6 +334,7 @@ function startProgress() {
 function stopProgress() {
   clearInterval(progressTimer);
   progressTimer = 0;
+  resetPipelineSteps(true);
   $("progress").hidden = true;
 }
 
@@ -295,11 +381,28 @@ function renderSearchDetails(data) {
   for (const hit of data.retrieved || []) {
     const row = el("tr");
     const score = Number(hit.score);
+    const scoreText = Number.isFinite(score) ? score.toFixed(SCORE_DIGITS) : "";
+
+    const scoreCell = el("td", "num");
+    scoreCell.append(scoreText);
+    if (Number.isFinite(score)) {
+      const meter = document.createElement("meter");
+      meter.className = "score-meter";
+      meter.min = 0;
+      meter.max = 1;
+      meter.low = 0.6;
+      meter.high = 0.75;
+      meter.optimum = 0.9;
+      meter.value = score;
+      meter.setAttribute("aria-hidden", "true");
+      scoreCell.append(meter);
+    }
+
     row.append(
-      el("td", "", lawShortName(hit.law_id).replace(/^قانون\s+/, "")), // the column is already "القانون"
+      el("td", "", lawShortName(hit.law_id).replace(/^قانون\s+/, "")),
       el("td", "num", articleLabel(hit.article)),
       el("td", "num", Number(hit.chunk_index) + 1),
-      el("td", "num", Number.isFinite(score) ? score.toFixed(SCORE_DIGITS) : ""),
+      scoreCell,
     );
     rows.appendChild(row);
   }
@@ -312,19 +415,133 @@ function renderSearchDetails(data) {
   droppedNote.hidden = dropped.length === 0;
 }
 
-function renderAnswer(data, question) {
+function renderFormattedAnswer(answerText, citations) {
+  const container = $("answer");
+  container.replaceChildren();
+
+  // Match mentions of articles like: المادة (11) or المادة 11 or المادة (4 مكرر)
+  const regex = /(الماد[ةه]\s*(?:\(\s*\d+\s*(?:مكرر)?\s*\)|\d+)(?:\s*مكرر)?)/g;
+  const parts = answerText.split(regex);
+
+  // Map article numbers to citations
+  const citationMap = new Map();
+  citations.forEach((c) => {
+    citationMap.set(c.article, c);
+    citationMap.set(c.article_label, c);
+    citationMap.set(articleLabel(c.article), c);
+  });
+
+  parts.forEach((part) => {
+    if (!part) return;
+    if (regex.test(part)) {
+      // Find matching citation
+      const match = /\d+/.exec(part);
+      const isBis = part.includes("مكرر");
+      const key = match ? (isBis ? `${match[0]}bis` : match[0]) : null;
+      const citation = key ? (citationMap.get(key) || citations[0]) : null;
+
+      if (citation) {
+        const btn = el("button", "inline-citation", part);
+        btn.type = "button";
+        btn.setAttribute("aria-haspopup", "dialog");
+        btn.addEventListener("click", (e) => {
+          openArticle(citation.law_id, citation.article, citation.article_label, citation.law_name, e.currentTarget, citation.snippet);
+        });
+        container.appendChild(btn);
+        return;
+      }
+    }
+    container.appendChild(document.createTextNode(part));
+  });
+}
+
+function renderAnswer(data, question, elapsed = 0) {
   const refused = Boolean(data.refused);
   $("result-question").textContent = question;
-  $("answer").textContent = data.answer;
+
+  if (refused) {
+    $("answer").textContent = data.answer;
+  } else {
+    renderFormattedAnswer(data.answer, data.citations || []);
+  }
+
   $("refusal").hidden = !refused;
   $("refusal-reason").textContent = refused
     ? REFUSAL_REASON_TEXT[data.refusal_reason] || GENERIC_REFUSAL_REASON
     : "";
   $("result").classList.toggle("is-refused", refused);
+
+  // Update Toolbar Badges
+  const badgeStatus = $("badge-status");
+  if (badgeStatus) {
+    if (refused) {
+      badgeStatus.className = "badge-refusal";
+      badgeStatus.textContent = "رفض صريح (خارج نصوص القانونين)";
+    } else {
+      badgeStatus.className = "badge-verified";
+      const citCount = (data.citations || []).length;
+      badgeStatus.textContent = citCount > 0 ? `موثّق بـ ${citCount} مواد قانونية` : "إجابة مستندة لنص القانون";
+    }
+  }
+  const badgeTime = $("badge-time");
+  if (badgeTime && elapsed > 0) {
+    badgeTime.textContent = `${elapsed}s`;
+  }
+
   renderCitations(refused ? [] : data.citations || []);
   renderSearchDetails(data);
   $("result-disclaimer").textContent = data.disclaimer || DEFAULT_DISCLAIMER;
   $("result").hidden = false;
+
+  setupAnswerActions(data, question);
+}
+
+function setupAnswerActions(data, question) {
+  const copyBtn = $("copy-answer");
+  const copyText = $("copy-text");
+  if (copyBtn) {
+    copyBtn.onclick = async () => {
+      let fullText = `السؤال: ${question}\n\nالإجابة:\n${data.answer}\n`;
+      if (data.citations && data.citations.length) {
+        fullText += "\nالمواد المستند إليها:\n";
+        data.citations.forEach((c) => {
+          fullText += `• المادة (${c.article_label}) - ${c.law_name}\n`;
+        });
+      }
+      fullText += `\n${data.disclaimer || DEFAULT_DISCLAIMER}\nالمصدر: قوانين الضرائب الأردنية (https://jo-tax-law-rag.onrender.com/)`;
+      try {
+        await navigator.clipboard.writeText(fullText);
+        if (copyText) copyText.textContent = "تم النسخ!";
+        setTimeout(() => {
+          if (copyText) copyText.textContent = "نسخ الإجابة";
+        }, 2000);
+      } catch {
+        // fallback
+      }
+    };
+  }
+
+  const shareBtn = $("share-link");
+  const shareText = $("share-text");
+  if (shareBtn) {
+    shareBtn.onclick = async () => {
+      const url = new URL(window.location.href);
+      url.searchParams.set("q", question);
+      const lawVal = $("law") ? $("law").value : "";
+      if (lawVal) url.searchParams.set("law", lawVal);
+      else url.searchParams.delete("law");
+
+      try {
+        await navigator.clipboard.writeText(url.href);
+        if (shareText) shareText.textContent = "تم نسخ الرابط!";
+        setTimeout(() => {
+          if (shareText) shareText.textContent = "مشاركة الرابط";
+        }, 2000);
+      } catch {
+        // fallback
+      }
+    };
+  }
 }
 
 // ---- the article sheet -------------------------------------------------------
@@ -344,21 +561,66 @@ function setArticleStatus(text, isError = false) {
   status.classList.toggle("is-error", isError);
 }
 
-function fillArticle(data) {
+let currentArticleMeta = null;
+
+function fillArticle(data, highlightSnippet = "") {
+  currentArticleMeta = {
+    lawId: data.law_id,
+    number: data.article,
+    articleNum: Number.parseInt(data.article, 10) || 1,
+    lawName: data.law_name,
+  };
+
   $("article-title").textContent = `المادة (${data.article_label})`;
   $("article-law").textContent = data.law_name;
-  $("article-text").textContent = data.text;
+
+  const articleTextNode = $("article-text");
+  articleTextNode.replaceChildren();
+
+  // Split text into paragraphs/clauses and format
+  const lines = data.text.split("\n");
+  lines.forEach((line) => {
+    const trimmed = line.trim();
+    if (!trimmed) return;
+
+    const p = el("p", "law-clause");
+    // Check if snippet text matches this paragraph
+    if (highlightSnippet && highlightSnippet.length > 15 && trimmed.includes(highlightSnippet.slice(0, 30))) {
+      const mark = el("mark", "cited-span", trimmed);
+      p.appendChild(mark);
+    } else {
+      p.textContent = trimmed;
+    }
+    articleTextNode.appendChild(p);
+  });
+
   const notes = $("article-notes");
   notes.replaceChildren(...(data.notes || []).map((note) => el("li", "", note)));
   $("article-notes-block").hidden = notes.children.length === 0;
+
   const href = safeHttpsUrl(data.source_url);
   const source = $("article-source");
   source.hidden = !href;
   if (href) source.href = href;
   setArticleStatus("");
+
+  // Update navigation buttons
+  updateArticleNav();
 }
 
-async function openArticle(lawId, article, label, lawName, trigger) {
+function updateArticleNav() {
+  if (!currentArticleMeta) return;
+  const num = currentArticleMeta.articleNum;
+  const prevBtn = $("article-prev");
+  const nextBtn = $("article-next");
+  if (prevBtn) prevBtn.disabled = num <= 1;
+  if (nextBtn) {
+    const maxArticles = currentArticleMeta.lawId.includes("income") ? 82 : 78;
+    nextBtn.disabled = num >= maxArticles;
+  }
+}
+
+async function openArticle(lawId, article, label, lawName, trigger, highlightSnippet = "") {
   const dialog = $("article-dialog");
   const ticket = ++articleTicket;
   articleTrigger = trigger || null;
@@ -379,7 +641,7 @@ async function openArticle(lawId, article, label, lawName, trigger) {
       data = await fetchJson(`/laws/${encodeURIComponent(lawId)}/articles/${encodeURIComponent(article)}`);
       articleCache.set(key, data);
     }
-    if (ticket === articleTicket) fillArticle(data);
+    if (ticket === articleTicket) fillArticle(data, highlightSnippet);
   } catch (error) {
     if (ticket !== articleTicket) return;
     setArticleStatus(error instanceof ApiError ? error.message : ARTICLE_ERROR_TEXT, true);
@@ -389,19 +651,28 @@ async function openArticle(lawId, article, label, lawName, trigger) {
 function setupArticleDialog() {
   const dialog = $("article-dialog");
   $("close-article").addEventListener("click", () => dialog.close());
-  // Esc closes a modal <dialog> natively (the "cancel" event); afterwards focus
-  // goes back to the button that opened it.
+
+  // Esc closes a modal <dialog> natively
   dialog.addEventListener("close", () => {
     articleTicket += 1;
     if (articleTrigger && articleTrigger.isConnected) articleTrigger.focus();
     articleTrigger = null;
   });
-  // A click on the backdrop lands on the <dialog> element itself.
+
+  // Light-dismiss with boundary check per modern-web-guidance
   dialog.addEventListener("click", (event) => {
-    if (event.target === dialog) dialog.close();
+    if (event.target !== dialog) return;
+    const rect = dialog.getBoundingClientRect();
+    const isDialogContent = (
+      rect.top <= event.clientY &&
+      event.clientY <= rect.top + rect.height &&
+      rect.left <= event.clientX &&
+      event.clientX <= rect.left + rect.width
+    );
+    if (!isDialogContent) dialog.close();
   });
-  // showModal() already makes the page behind inert; this keeps Tab cycling
-  // inside the sheet instead of leaving for the browser's own toolbar.
+
+  // Tab navigation trap
   dialog.addEventListener("keydown", (event) => {
     if (event.key !== "Tab") return;
     const items = focusableIn(dialog);
@@ -416,6 +687,40 @@ function setupArticleDialog() {
       first.focus();
     }
   });
+
+  // Prev / Next button listeners
+  const prevBtn = $("article-prev");
+  if (prevBtn) {
+    prevBtn.addEventListener("click", () => {
+      if (!currentArticleMeta) return;
+      const targetNum = currentArticleMeta.articleNum - 1;
+      if (targetNum >= 1) {
+        openArticle(currentArticleMeta.lawId, String(targetNum), String(targetNum), currentArticleMeta.lawName, prevBtn);
+      }
+    });
+  }
+
+  const nextBtn = $("article-next");
+  if (nextBtn) {
+    nextBtn.addEventListener("click", () => {
+      if (!currentArticleMeta) return;
+      const targetNum = currentArticleMeta.articleNum + 1;
+      openArticle(currentArticleMeta.lawId, String(targetNum), String(targetNum), currentArticleMeta.lawName, nextBtn);
+    });
+  }
+
+  // Jump to article form
+  const jumpForm = $("article-jump-form");
+  if (jumpForm) {
+    jumpForm.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const val = $("jump-number") ? $("jump-number").value.trim() : "";
+      if (val && currentArticleMeta) {
+        openArticle(currentArticleMeta.lawId, val, val, currentArticleMeta.lawName, $("jump-number"));
+        $("jump-number").value = "";
+      }
+    });
+  }
 }
 
 // ---- Turnstile ------------------------------------------------------------------
@@ -462,6 +767,64 @@ async function setupCaptcha() {
 function resetCaptcha() {
   captcha.token = "";
   if (captcha.enabled && window.turnstile && captcha.widgetId !== null) window.turnstile.reset(captcha.widgetId);
+}
+
+// ---- Session Recent Questions History ------------------------------------
+
+const RECENT_KEY = "jo_tax_recent_asks";
+const MAX_RECENT = 5;
+
+function getRecentAsks() {
+  try {
+    const raw = sessionStorage.getItem(RECENT_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveRecentAsk(question, lawVal, data, elapsed) {
+  try {
+    let list = getRecentAsks();
+    list = list.filter((item) => item.question !== question);
+    list.unshift({ question, lawVal, data, elapsed });
+    if (list.length > MAX_RECENT) list = list.slice(0, MAX_RECENT);
+    sessionStorage.setItem(RECENT_KEY, JSON.stringify(list));
+    renderRecentAsks();
+  } catch {
+    // quota
+  }
+}
+
+function renderRecentAsks() {
+  const container = $("recent-container");
+  const chipsNode = $("recent-chips");
+  if (!container || !chipsNode) return;
+
+  const list = getRecentAsks();
+  if (!list.length) {
+    container.hidden = true;
+    return;
+  }
+
+  chipsNode.replaceChildren();
+  list.forEach((item) => {
+    const chip = el("button", "recent-chip", item.question);
+    chip.type = "button";
+    chip.addEventListener("click", () => {
+      $("question").value = item.question;
+      updateCount();
+      if ($("law")) $("law").value = item.lawVal || "";
+      const select = $("law");
+      document.querySelectorAll(".law-pill").forEach((p) => {
+        p.setAttribute("aria-selected", p.dataset.value === (item.lawVal || "") ? "true" : "false");
+      });
+      renderAnswer(item.data, item.question, item.elapsed);
+      focusAnswer();
+    });
+    chipsNode.appendChild(chip);
+  });
+  container.hidden = false;
 }
 
 // ---- asking ----------------------------------------------------------------------
@@ -548,6 +911,7 @@ async function onSubmit(event) {
   refreshButtons();
   $("result").hidden = true;
   startProgress();
+  const startedAt = Date.now();
   try {
     const body = { question };
     if ($("law").value) body.law_id = $("law").value;
@@ -562,9 +926,11 @@ async function onSubmit(event) {
       },
       REQUEST_TIMEOUT_MS,
     );
+    const elapsed = Math.round((Date.now() - startedAt) / 1000);
     stopProgress();
-    renderAnswer(data, question);
+    renderAnswer(data, question, elapsed);
     setStatus("done", "", data.refused ? REFUSAL_READY_TEXT : ANSWER_READY_TEXT);
+    saveRecentAsk(question, $("law").value, data, elapsed);
     focusAnswer();
   } catch (error) {
     stopProgress();
@@ -587,7 +953,10 @@ function onExample(event) {
 }
 
 function updateCount() {
-  $("question-count").textContent = `${$("question").value.length} / ${MAX_QUESTION_CHARS}`;
+  const len = $("question").value.length;
+  $("question-count").textContent = `${len} / ${MAX_QUESTION_CHARS}`;
+  const clearBtn = $("clear-question");
+  if (clearBtn) clearBtn.hidden = len === 0;
 }
 
 function onQuestionInput() {
@@ -603,10 +972,13 @@ function onQuestionKeydown(event) {
 }
 
 document.addEventListener("DOMContentLoaded", () => {
+  initTheme();
+  initLawPills();
+  initClearButton();
   $("ask-form").addEventListener("submit", onSubmit);
   $("question").addEventListener("input", onQuestionInput);
   $("question").addEventListener("keydown", onQuestionKeydown);
-  for (const button of document.querySelectorAll("button.example")) {
+  for (const button of document.querySelectorAll("button.example, button.guardrail-chip")) {
     button.addEventListener("click", onExample);
   }
   setupArticleDialog();
@@ -614,4 +986,20 @@ document.addEventListener("DOMContentLoaded", () => {
   refreshButtons();
   loadLaws();
   setupCaptcha();
+  renderRecentAsks();
+
+  // URL query pre-fill: ?q=...&law=...
+  const params = new URLSearchParams(window.location.search);
+  const qParam = params.get("q");
+  if (qParam) {
+    $("question").value = qParam;
+    updateCount();
+    const lawParam = params.get("law");
+    if (lawParam && $("law")) {
+      $("law").value = lawParam;
+      document.querySelectorAll(".law-pill").forEach((p) => {
+        p.setAttribute("aria-selected", p.dataset.value === lawParam ? "true" : "false");
+      });
+    }
+  }
 });

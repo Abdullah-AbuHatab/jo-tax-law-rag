@@ -60,6 +60,7 @@
   /* Colour: cool ledger paper, ink, and the law green of the favicon. */
   --color-page: #f3f5f4;
   --color-surface: #ffffff;
+  --color-surface-subtle: #ebf0ee;
   --color-ink: #17201d;
   --color-muted: #4f5b56;
   --color-rule: #d5ddd9; /* decorative dividers */
@@ -68,6 +69,9 @@
   --color-accent-hover: #084638;
   --color-on-accent: #ffffff;
   --color-accent-soft: #e6f0eb;
+  --color-accent-subtle: #f0f6f3;
+  --color-gold: #9a7228;
+  --color-gold-soft: #fbf5ea;
   --color-quote: #f5f8f6; /* behind text quoted from a law */
   --color-notice-bg: #fbf4e2;
   --color-notice-rule: #c9a04a;
@@ -81,6 +85,8 @@
   --color-focus: #2459c7;
   --color-backdrop: rgb(16 22 20 / 0.55);
   --shadow-sheet: 0 0 40px rgb(16 22 20 / 0.22);
+  --shadow-card: 0 1px 3px rgb(16 22 20 / 0.06), 0 1px 2px rgb(16 22 20 / 0.04);
+  --shadow-pop: 0 4px 14px rgb(16 22 20 / 0.08);
 
   --space-1: 0.25rem;
   --space-2: 0.5rem;
@@ -92,6 +98,7 @@
 
   --radius-control: 6px;
   --radius-panel: 10px;
+  --radius-pill: 9999px;
   --rule-strong: 4px;
   --target: 2.75rem; /* 44 px touch targets */
 
@@ -100,6 +107,7 @@
   --font-code: ui-monospace, "Cascadia Mono", Consolas, monospace;
 
   /* Arabic needs about 10-15 % more size and more leading than Latin. */
+  --text-xs: 0.8125rem;
   --text-sm: 0.9375rem;
   --text-base: 1.0625rem;
   --text-answer: 1.125rem;
@@ -118,10 +126,12 @@
   --duration-sweep: 1.6s;
 }
 
+/* System dark preference when not explicitly forced to light */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --color-page: #101614;
     --color-surface: #18201d;
+    --color-surface-subtle: #202b27;
     --color-ink: #e4eae7;
     --color-muted: #a2afa9;
     --color-rule: #2c3733;
@@ -130,6 +140,9 @@
     --color-accent-hover: #7fd3ba;
     --color-on-accent: #0b1411;
     --color-accent-soft: #15302a;
+    --color-accent-subtle: #193831;
+    --color-gold: #d9b36a;
+    --color-gold-soft: #2a2314;
     --color-quote: #141c19;
     --color-notice-bg: #2a2414;
     --color-notice-rule: #8a6d2e;
@@ -143,7 +156,42 @@
     --color-focus: #8ab4f8;
     --color-backdrop: rgb(0 0 0 / 0.65);
     --shadow-sheet: 0 0 40px rgb(0 0 0 / 0.5);
+    --shadow-card: 0 1px 3px rgb(0 0 0 / 0.25);
+    --shadow-pop: 0 4px 14px rgb(0 0 0 / 0.35);
   }
+}
+
+/* Explicit user selection via toggle */
+html[data-theme="dark"] {
+  --color-page: #101614;
+  --color-surface: #18201d;
+  --color-surface-subtle: #202b27;
+  --color-ink: #e4eae7;
+  --color-muted: #a2afa9;
+  --color-rule: #2c3733;
+  --color-control-border: #6b7a73;
+  --color-accent: #5bc2a4;
+  --color-accent-hover: #7fd3ba;
+  --color-on-accent: #0b1411;
+  --color-accent-soft: #15302a;
+  --color-accent-subtle: #193831;
+  --color-gold: #d9b36a;
+  --color-gold-soft: #2a2314;
+  --color-quote: #141c19;
+  --color-notice-bg: #2a2414;
+  --color-notice-rule: #8a6d2e;
+  --color-notice-ink: #f0d9a6;
+  --color-refusal-bg: #1c2433;
+  --color-refusal-rule: #6d82a8;
+  --color-refusal-ink: #c9d4e8;
+  --color-danger-bg: #2e1714;
+  --color-danger-rule: #d0645a;
+  --color-danger-ink: #ffa196;
+  --color-focus: #8ab4f8;
+  --color-backdrop: rgb(0 0 0 / 0.65);
+  --shadow-sheet: 0 0 40px rgb(0 0 0 / 0.5);
+  --shadow-card: 0 1px 3px rgb(0 0 0 / 0.25);
+  --shadow-pop: 0 4px 14px rgb(0 0 0 / 0.35);
 }
 
 /* ---- base ------------------------------------------------------------ */
@@ -301,9 +349,16 @@ kbd {
   flex: none;
 }
 
+.site-nav {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
 .site-nav ul {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 0 var(--space-4);
   margin: 0;
   padding: 0;
@@ -320,6 +375,387 @@ kbd {
 }
 
 .site-nav a:hover {
+  color: var(--color-accent);
+  text-decoration: underline;
+}
+
+/* Theme toggle button in header */
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: calc(var(--target) - 0.5rem);
+  padding: var(--space-1) var(--space-3);
+  background: var(--color-surface-subtle);
+  color: var(--color-ink);
+  border: 1px solid var(--color-rule);
+  border-radius: var(--radius-pill);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color var(--duration-ui) ease, background-color var(--duration-ui) ease;
+}
+
+.theme-toggle:hover {
+  border-color: var(--color-control-border);
+}
+
+.theme-toggle svg {
+  display: block;
+  flex: none;
+}
+
+/* Trust & Verification Ribbon */
+.trust-ribbon {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  margin-block-end: var(--space-4);
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-surface);
+  border: 1px solid var(--color-rule);
+  border-radius: var(--radius-control);
+  font-size: var(--text-xs);
+  color: var(--color-muted);
+}
+
+.trust-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 0.15rem 0.5rem;
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+  border-radius: var(--radius-pill);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.trust-badge-gold {
+  background: var(--color-gold-soft);
+  color: var(--color-gold);
+}
+
+.trust-sep {
+  color: var(--color-rule);
+  user-select: none;
+}
+
+/* Law segmented selector (Tabs / Pills) */
+.law-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-block-end: var(--space-3);
+}
+
+.law-pill {
+  min-height: calc(var(--target) - 0.25rem);
+  padding: var(--space-1) var(--space-3);
+  background: var(--color-page);
+  color: var(--color-muted);
+  border: 1px solid var(--color-rule);
+  border-radius: var(--radius-pill);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--duration-ui) ease;
+}
+
+.law-pill:hover {
+  border-color: var(--color-control-border);
+  color: var(--color-ink);
+}
+
+.law-pill[aria-selected="true"] {
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+  border-color: var(--color-accent);
+}
+
+/* Guardrail test chip distinct styling */
+.guardrail-chip {
+  min-height: var(--target);
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-refusal-bg);
+  color: var(--color-refusal-ink);
+  border: 1px solid var(--color-rule);
+  border-inline-start: 3px solid var(--color-refusal-rule);
+  border-radius: var(--radius-control);
+  font-size: var(--text-sm);
+  text-align: start;
+  cursor: pointer;
+  transition: all var(--duration-ui) ease-out;
+}
+
+.guardrail-chip:hover {
+  border-color: var(--color-refusal-rule);
+}
+
+/* Clear question button in textarea header */
+.button-clear {
+  padding: 0 var(--space-2);
+  background: none;
+  border: 0;
+  color: var(--color-muted);
+  font-size: var(--text-xs);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.button-clear:hover {
+  color: var(--color-danger-ink);
+}
+
+/* Recent session history bar */
+.recent-asks {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin-block-start: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-surface-subtle);
+  border-radius: var(--radius-control);
+  font-size: var(--text-xs);
+}
+
+.recent-asks-title {
+  color: var(--color-muted);
+  font-weight: 600;
+}
+
+.recent-chip {
+  padding: 0.2rem 0.6rem;
+  background: var(--color-surface);
+  border: 1px solid var(--color-rule);
+  border-radius: var(--radius-pill);
+  color: var(--color-ink);
+  cursor: pointer;
+  max-width: 18rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recent-chip:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+/* Stepper progress during loading */
+.pipeline-steps {
+  display: grid;
+  gap: var(--space-2);
+  margin: var(--space-3) 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--text-xs);
+}
+
+.pipeline-step {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-muted);
+  transition: color var(--duration-ui) ease;
+}
+
+.pipeline-step[data-state="active"] {
+  color: var(--color-accent);
+  font-weight: 600;
+}
+
+.pipeline-step[data-state="done"] {
+  color: var(--color-ink);
+}
+
+.step-indicator {
+  display: inline-grid;
+  place-items: center;
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 50%;
+  background: var(--color-rule);
+  color: var(--color-surface);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  flex: none;
+}
+
+.pipeline-step[data-state="active"] .step-indicator {
+  background: var(--color-accent);
+}
+
+.pipeline-step[data-state="done"] .step-indicator {
+  background: var(--color-accent);
+}
+
+/* Answer Toolbar */
+.result-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-block-end: var(--space-3);
+  padding-block-end: var(--space-3);
+  border-block-end: 1px solid var(--color-rule);
+}
+
+.result-badges {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.badge-verified {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 0.2rem 0.6rem;
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+  border-radius: var(--radius-pill);
+  font-size: var(--text-xs);
+  font-weight: 600;
+}
+
+.badge-refusal {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 0.2rem 0.6rem;
+  background: var(--color-refusal-bg);
+  color: var(--color-refusal-ink);
+  border-radius: var(--radius-pill);
+  font-size: var(--text-xs);
+  font-weight: 600;
+}
+
+.result-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.btn-action {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: calc(var(--target) - 0.75rem);
+  padding: 0.25rem 0.65rem;
+  background: var(--color-surface-subtle);
+  color: var(--color-ink);
+  border: 1px solid var(--color-rule);
+  border-radius: var(--radius-control);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--duration-ui) ease;
+}
+
+.btn-action:hover {
+  border-color: var(--color-control-border);
+  background: var(--color-page);
+}
+
+/* Clickable inline citations inside answer prose */
+.inline-citation {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.15rem;
+  margin-inline: 0.15rem;
+  padding: 0.05rem 0.4rem;
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  font-family: inherit;
+  font-size: 0.9em;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+  vertical-align: baseline;
+  transition: border-color var(--duration-ui) ease;
+}
+
+.inline-citation:hover {
+  border-color: var(--color-accent);
+}
+
+/* Similarity meter element in retrieval table */
+meter.score-meter {
+  display: inline-block;
+  width: 4rem;
+  height: 0.65rem;
+  vertical-align: middle;
+  margin-inline-start: var(--space-1);
+}
+
+/* Styled clauses inside law drawer */
+.law-clause {
+  margin-block-end: var(--space-3);
+  line-height: 2.1;
+}
+
+.law-clause-header {
+  font-weight: 600;
+  color: var(--color-accent);
+}
+
+mark.cited-span {
+  background: #fff3cd;
+  color: #533f03;
+  padding: 0.1rem 0.25rem;
+  border-radius: 3px;
+}
+
+@media (prefers-color-scheme: dark) {
+  mark.cited-span {
+    background: #4d3e16;
+    color: #f7e6b5;
+  }
+}
+
+html[data-theme="dark"] mark.cited-span {
+  background: #4d3e16;
+  color: #f7e6b5;
+}
+
+/* Dialog footer navigation */
+.sheet-nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-block-start: var(--space-4);
+  padding-block-start: var(--space-4);
+  border-block-start: 1px solid var(--color-rule);
+}
+
+.sheet-nav-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.jump-form {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.jump-input {
+  width: 4rem !important;
+  min-height: calc(var(--target) - 0.75rem) !important;
+  padding: 0.15rem 0.35rem !important;
+  font-size: var(--text-xs) !important;
+  text-align: center;
+}
   color: var(--color-accent);
   text-decoration: underline;
 }
