@@ -74,32 +74,7 @@ class ApiError extends Error {
   }
 }
 
-// ---- Theme Management --------------------------------------------------------
-
-function initTheme() {
-  const saved = localStorage.getItem("theme");
-  const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-  const active = saved || (prefersDark ? "dark" : "light");
-  applyTheme(active);
-
-  const toggle = $("theme-toggle");
-  if (toggle) {
-    toggle.addEventListener("click", () => {
-      const current = document.documentElement.getAttribute("data-theme") || (prefersDark ? "dark" : "light");
-      const next = current === "dark" ? "light" : "dark";
-      localStorage.setItem("theme", next);
-      applyTheme(next);
-    });
-  }
-}
-
-function applyTheme(theme) {
-  document.documentElement.setAttribute("data-theme", theme);
-  const label = $("theme-label");
-  if (label) {
-    label.textContent = theme === "dark" ? "النهاري" : "الليلي";
-  }
-}
+// ---- HTTP -----------------------------------------------------------------
 
 // Retry-After in whole seconds; 0 when absent or not a plain number.
 function retryAfterSeconds(response) {
@@ -193,11 +168,22 @@ function renderCoverage(laws) {
   list.replaceChildren();
   for (const law of laws) {
     const item = el("li");
-    item.append(
-      el("span", "coverage-name", law.name),
-      el("span", "coverage-meta", `عدد المواد: ${law.article_count}`),
-      el("span", "coverage-meta", `أُخذ النص من المصدر في ${law.retrieved}`),
-    );
+    item.append(el("span", "coverage-name", law.name));
+    if (law.version_ar) {
+      item.append(el("span", "coverage-meta", law.version_ar));
+    }
+    item.append(el("span", "coverage-meta", `عدد المواد: ${law.article_count}`));
+    if (law.coverage_note_ar) {
+      item.append(el("span", "coverage-meta", law.coverage_note_ar));
+    }
+    item.append(el("span", "coverage-meta", `أُخذ النص من المصدر في ${law.retrieved}`));
+
+    const browseBtn = el("button", "text-button", "تصفّح مواد القانون");
+    browseBtn.type = "button";
+    browseBtn.setAttribute("aria-haspopup", "dialog");
+    browseBtn.addEventListener("click", () => openArticle(law.law_id, "1", "1", law.name, browseBtn));
+    item.append(browseBtn);
+
     const href = safeHttpsUrl(law.source_url);
     if (href) {
       const link = el("a", "", "النص الرسمي (ملف خارجي)");
@@ -211,55 +197,48 @@ function renderCoverage(laws) {
   $("coverage-status").hidden = laws.length > 0;
 }
 
+const SCOPE_ALL_LABEL = "القانونان كلاهما";
+
+function selectedLawId() {
+  const checked = document.querySelector('input[name="law"]:checked');
+  return checked ? checked.value : "";
+}
+
+function scopeLabel(lawId) {
+  if (!lawId) return SCOPE_ALL_LABEL;
+  const law = lawsById.get(lawId);
+  return law ? law.name : lawId;
+}
+
+function renderScope(laws) {
+  const container = $("scope-options");
+  if (!container) return;
+  // Keep the first radio (#scope-all) and append options from laws
+  for (const law of laws) {
+    const label = el("label", "scope-option");
+    const input = document.createElement("input");
+    input.type = "radio";
+    input.name = "law";
+    input.value = law.law_id;
+    const shortText = (law.short_name || law.name).replace(/^قانون\s+/, "");
+    label.append(input, el("span", "", shortText));
+    container.appendChild(label);
+  }
+}
+
 async function loadLaws() {
   try {
     const laws = await fetchJson("/laws");
     if (!Array.isArray(laws)) throw new Error("unexpected /laws body");
-    const select = $("law");
     for (const law of laws) {
       lawsById.set(law.law_id, law);
-      const option = el("option", "", law.short_name || law.name);
-      option.value = law.law_id;
-      select.appendChild(option);
     }
+    renderScope(laws);
     renderCoverage(laws);
   } catch {
     // The filter is optional; asking still works over all laws.
     $("coverage-status").textContent = LAWS_ERROR_TEXT;
   }
-}
-
-function initLawPills() {
-  const pills = document.querySelectorAll(".law-pill");
-  const select = $("law");
-  pills.forEach((pill) => {
-    pill.addEventListener("click", () => {
-      const val = pill.dataset.value || "";
-      if (select) {
-        select.value = val;
-      }
-      pills.forEach((p) => p.setAttribute("aria-selected", p === pill ? "true" : "false"));
-    });
-  });
-  if (select) {
-    select.addEventListener("change", () => {
-      pills.forEach((p) => p.setAttribute("aria-selected", p.dataset.value === select.value ? "true" : "false"));
-    });
-  }
-}
-
-function initClearButton() {
-  const clearBtn = $("clear-question");
-  const textarea = $("question");
-  if (!clearBtn || !textarea) return;
-
-  clearBtn.addEventListener("click", () => {
-    textarea.value = "";
-    updateCount();
-    showFieldError("");
-    clearBtn.hidden = true;
-    textarea.focus();
-  });
 }
 
 // ---- status and progress ---------------------------------------------------
@@ -285,34 +264,9 @@ function elapsedSeconds() {
   return Math.floor((Date.now() - progressStartedAt) / TICK_MS);
 }
 
-function updatePipelineSteps(elapsed) {
-  const steps = document.querySelectorAll(".pipeline-step");
-  if (!steps.length) return;
-
-  // 1: 0-3s, 2: 3-6s, 3: 6-22s, 4: >22s (or on arrival)
-  let activeIndex = 1;
-  if (elapsed >= 22) activeIndex = 4;
-  else if (elapsed >= 6) activeIndex = 3;
-  else if (elapsed >= 3) activeIndex = 2;
-
-  steps.forEach((step) => {
-    const num = Number(step.dataset.step);
-    if (num < activeIndex) step.dataset.state = "done";
-    else if (num === activeIndex) step.dataset.state = "active";
-    else step.dataset.state = "pending";
-  });
-}
-
-function resetPipelineSteps(allDone = false) {
-  document.querySelectorAll(".pipeline-step").forEach((step) => {
-    step.dataset.state = allDone ? "done" : "pending";
-  });
-}
-
 function tickProgress() {
   const elapsed = elapsedSeconds();
   $("progress-elapsed").textContent = clockText(elapsed);
-  updatePipelineSteps(elapsed);
   if (!slowNoticeShown && elapsed >= SLOW_AFTER_SECONDS) {
     slowNoticeShown = true;
     setStatus("loading", LOADING_TITLE, SLOW_TEXT);
@@ -324,8 +278,6 @@ function startProgress() {
   slowNoticeShown = false;
   setStatus("loading", LOADING_TITLE, LOADING_TEXT);
   $("progress-elapsed").textContent = clockText(0);
-  resetPipelineSteps(false);
-  updatePipelineSteps(0);
   $("progress").hidden = false;
   clearInterval(progressTimer);
   progressTimer = setInterval(tickProgress, TICK_MS);
@@ -334,11 +286,113 @@ function startProgress() {
 function stopProgress() {
   clearInterval(progressTimer);
   progressTimer = 0;
-  resetPipelineSteps(true);
   $("progress").hidden = true;
 }
 
 // ---- the answer --------------------------------------------------------------
+
+const ARTICLE_MENTION = /(?:ال)?ماد[ةه]\s*\(?\s*([0-9\u0660-\u0669\u06F0-\u06F9]{1,4})\s*(مكرر)?\s*\)?(?:\s*(مكرر))?/gu;
+
+function toAsciiDigits(text) {
+  return text
+    .replace(/[\u0660-\u0669]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 0x0660 + 0x30))
+    .replace(/[\u06F0-\u06F9]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 0x06F0 + 0x30));
+}
+
+function articleLinkTargets(citations) {
+  const counts = new Map();
+  for (const c of citations) {
+    counts.set(c.article, (counts.get(c.article) || 0) + 1);
+  }
+  const targets = new Map();
+  for (const c of citations) {
+    if (counts.get(c.article) === 1) {
+      targets.set(c.article, c);
+    }
+  }
+  return targets;
+}
+
+function renderAnswerText(container, text, citations) {
+  container.replaceChildren();
+  const targets = articleLinkTargets(citations);
+  const matches = [...text.matchAll(ARTICLE_MENTION)];
+  if (matches.length === 0) {
+    container.textContent = text;
+    return;
+  }
+  let lastIndex = 0;
+  for (const match of matches) {
+    const matchIndex = match.index;
+    if (matchIndex > lastIndex) {
+      container.appendChild(document.createTextNode(text.slice(lastIndex, matchIndex)));
+    }
+    const digits = toAsciiDigits(match[1]);
+    const hasBis = Boolean(match[2] || match[3]);
+    const articleKey = hasBis ? `${digits}bis` : digits;
+    const citation = targets.get(articleKey);
+
+    if (citation) {
+      const btn = el("button", "article-link", match[0]);
+      btn.type = "button";
+      btn.setAttribute("aria-haspopup", "dialog");
+      btn.addEventListener("click", () => {
+        openArticle(citation.law_id, citation.article, citation.article_label, citation.law_name, btn);
+      });
+      container.appendChild(btn);
+    } else {
+      container.appendChild(document.createTextNode(match[0]));
+    }
+    lastIndex = matchIndex + match[0].length;
+  }
+  if (lastIndex < text.length) {
+    container.appendChild(document.createTextNode(text.slice(lastIndex)));
+  }
+}
+
+let lastAnswer = null;
+let copyResetTimer = null;
+
+function buildCopyText(request, data, origin) {
+  const lines = [];
+  lines.push(`السؤال: ${request.question}`);
+  lines.push(`نطاق البحث: ${scopeLabel(request.lawId)}`);
+  lines.push("");
+  lines.push("الإجابة:");
+  lines.push(data.answer);
+  if (data.citations && data.citations.length > 0) {
+    lines.push("");
+    lines.push("المواد التي استندت إليها الإجابة:");
+    for (const c of data.citations) {
+      lines.push(`- المادة (${c.article_label}) من ${c.law_name}`);
+    }
+  }
+  lines.push("");
+  lines.push(data.disclaimer || DEFAULT_DISCLAIMER);
+  lines.push(`المصدر: ${origin}/`);
+  return lines.join("\n");
+}
+
+async function copyAnswer() {
+  if (!lastAnswer) return;
+  const btn = $("copy-answer");
+  try {
+    await navigator.clipboard.writeText(buildCopyText(lastAnswer.request, lastAnswer.data, location.origin));
+    btn.textContent = "نُسخت";
+    setStatus("done", "", "نُسخت الإجابة مع أرقام المواد.");
+    clearTimeout(copyResetTimer);
+    copyResetTimer = setTimeout(() => {
+      btn.textContent = "نسخ الإجابة مع أرقام المواد";
+    }, 2000);
+  } catch {
+    btn.textContent = "تعذّر النسخ";
+    setStatus("done", "", "تعذّر النسخ تلقائياً. حدّد نص الإجابة وانسخه يدوياً.");
+    clearTimeout(copyResetTimer);
+    copyResetTimer = setTimeout(() => {
+      btn.textContent = "نسخ الإجابة مع أرقام المواد";
+    }, 2000);
+  }
+}
 
 function renderCitations(citations) {
   const list = $("citations");
@@ -381,28 +435,11 @@ function renderSearchDetails(data) {
   for (const hit of data.retrieved || []) {
     const row = el("tr");
     const score = Number(hit.score);
-    const scoreText = Number.isFinite(score) ? score.toFixed(SCORE_DIGITS) : "";
-
-    const scoreCell = el("td", "num");
-    scoreCell.append(scoreText);
-    if (Number.isFinite(score)) {
-      const meter = document.createElement("meter");
-      meter.className = "score-meter";
-      meter.min = 0;
-      meter.max = 1;
-      meter.low = 0.6;
-      meter.high = 0.75;
-      meter.optimum = 0.9;
-      meter.value = score;
-      meter.setAttribute("aria-hidden", "true");
-      scoreCell.append(meter);
-    }
-
     row.append(
-      el("td", "", lawShortName(hit.law_id).replace(/^قانون\s+/, "")),
+      el("td", "", lawShortName(hit.law_id).replace(/^قانون\s+/, "")), // the column is already "القانون"
       el("td", "num", articleLabel(hit.article)),
       el("td", "num", Number(hit.chunk_index) + 1),
-      scoreCell,
+      el("td", "num", Number.isFinite(score) ? score.toFixed(SCORE_DIGITS) : ""),
     );
     rows.appendChild(row);
   }
@@ -415,143 +452,37 @@ function renderSearchDetails(data) {
   droppedNote.hidden = dropped.length === 0;
 }
 
-function renderFormattedAnswer(answerText, citations) {
-  const container = $("answer");
-  container.replaceChildren();
-
-  // Match mentions of articles like: المادة (11) or المادة 11 or المادة (4 مكرر)
-  const regex = /(الماد[ةه]\s*(?:\(\s*\d+\s*(?:مكرر)?\s*\)|\d+)(?:\s*مكرر)?)/g;
-  const parts = answerText.split(regex);
-
-  // Map article numbers to citations
-  const citationMap = new Map();
-  citations.forEach((c) => {
-    citationMap.set(c.article, c);
-    citationMap.set(c.article_label, c);
-    citationMap.set(articleLabel(c.article), c);
-  });
-
-  parts.forEach((part) => {
-    if (!part) return;
-    if (regex.test(part)) {
-      // Find matching citation
-      const match = /\d+/.exec(part);
-      const isBis = part.includes("مكرر");
-      const key = match ? (isBis ? `${match[0]}bis` : match[0]) : null;
-      const citation = key ? (citationMap.get(key) || citations[0]) : null;
-
-      if (citation) {
-        const btn = el("button", "inline-citation", part);
-        btn.type = "button";
-        btn.setAttribute("aria-haspopup", "dialog");
-        btn.addEventListener("click", (e) => {
-          openArticle(citation.law_id, citation.article, citation.article_label, citation.law_name, e.currentTarget, citation.snippet);
-        });
-        container.appendChild(btn);
-        return;
-      }
-    }
-    container.appendChild(document.createTextNode(part));
-  });
-}
-
-function renderAnswer(data, question, elapsed = 0) {
+function renderAnswer(data, request) {
+  lastAnswer = { data, request };
   const refused = Boolean(data.refused);
-  $("result-question").textContent = question;
-
-  if (refused) {
-    $("answer").textContent = data.answer;
-  } else {
-    renderFormattedAnswer(data.answer, data.citations || []);
-  }
-
+  $("result-question").textContent = request.question;
+  const scopeNode = $("result-scope");
+  if (scopeNode) scopeNode.textContent = scopeLabel(request.lawId);
+  renderAnswerText($("answer"), data.answer, refused ? [] : data.citations || []);
+  const copyBtn = $("copy-answer");
+  if (copyBtn) copyBtn.hidden = refused;
   $("refusal").hidden = !refused;
   $("refusal-reason").textContent = refused
     ? REFUSAL_REASON_TEXT[data.refusal_reason] || GENERIC_REFUSAL_REASON
     : "";
   $("result").classList.toggle("is-refused", refused);
-
-  // Update Toolbar Badges
-  const badgeStatus = $("badge-status");
-  if (badgeStatus) {
-    if (refused) {
-      badgeStatus.className = "badge-refusal";
-      badgeStatus.textContent = "رفض صريح (خارج نصوص القانونين)";
-    } else {
-      badgeStatus.className = "badge-verified";
-      const citCount = (data.citations || []).length;
-      badgeStatus.textContent = citCount > 0 ? `موثّق بـ ${citCount} مواد قانونية` : "إجابة مستندة لنص القانون";
-    }
-  }
-  const badgeTime = $("badge-time");
-  if (badgeTime && elapsed > 0) {
-    badgeTime.textContent = `${elapsed}s`;
-  }
-
   renderCitations(refused ? [] : data.citations || []);
   renderSearchDetails(data);
   $("result-disclaimer").textContent = data.disclaimer || DEFAULT_DISCLAIMER;
   $("result").hidden = false;
-
-  setupAnswerActions(data, question);
-}
-
-function setupAnswerActions(data, question) {
-  const copyBtn = $("copy-answer");
-  const copyText = $("copy-text");
-  if (copyBtn) {
-    copyBtn.onclick = async () => {
-      let fullText = `السؤال: ${question}\n\nالإجابة:\n${data.answer}\n`;
-      if (data.citations && data.citations.length) {
-        fullText += "\nالمواد المستند إليها:\n";
-        data.citations.forEach((c) => {
-          fullText += `• المادة (${c.article_label}) - ${c.law_name}\n`;
-        });
-      }
-      fullText += `\n${data.disclaimer || DEFAULT_DISCLAIMER}\nالمصدر: قوانين الضرائب الأردنية (https://jo-tax-law-rag.onrender.com/)`;
-      try {
-        await navigator.clipboard.writeText(fullText);
-        if (copyText) copyText.textContent = "تم النسخ!";
-        setTimeout(() => {
-          if (copyText) copyText.textContent = "نسخ الإجابة";
-        }, 2000);
-      } catch {
-        // fallback
-      }
-    };
-  }
-
-  const shareBtn = $("share-link");
-  const shareText = $("share-text");
-  if (shareBtn) {
-    shareBtn.onclick = async () => {
-      const url = new URL(window.location.href);
-      url.searchParams.set("q", question);
-      const lawVal = $("law") ? $("law").value : "";
-      if (lawVal) url.searchParams.set("law", lawVal);
-      else url.searchParams.delete("law");
-
-      try {
-        await navigator.clipboard.writeText(url.href);
-        if (shareText) shareText.textContent = "تم نسخ الرابط!";
-        setTimeout(() => {
-          if (shareText) shareText.textContent = "مشاركة الرابط";
-        }, 2000);
-      } catch {
-        // fallback
-      }
-    };
-  }
 }
 
 // ---- the article sheet -------------------------------------------------------
 
 const articleCache = new Map();
+const articleIndexCache = new Map();
 let articleTicket = 0; // a newer request (or closing the sheet) makes older responses stale
 let articleTrigger = null;
+let currentArticle = null;
 
 function focusableIn(container) {
-  const selector = "a[href]:not([hidden]), button:not([disabled]), [tabindex]:not([tabindex='-1'])";
+  const selector =
+    "a[href]:not([hidden]), button:not([disabled]), select:not([disabled]):not([hidden]), [tabindex]:not([tabindex='-1'])";
   return [...container.querySelectorAll(selector)].filter((node) => node.getClientRects().length > 0);
 }
 
@@ -561,71 +492,80 @@ function setArticleStatus(text, isError = false) {
   status.classList.toggle("is-error", isError);
 }
 
-let currentArticleMeta = null;
+function loadArticleIndex(lawId) {
+  let promise = articleIndexCache.get(lawId);
+  if (!promise) {
+    promise = fetchJson(`/laws/${encodeURIComponent(lawId)}/articles`).catch((err) => {
+      articleIndexCache.delete(lawId);
+      throw err;
+    });
+    articleIndexCache.set(lawId, promise);
+  }
+  return promise;
+}
 
-function fillArticle(data, highlightSnippet = "") {
-  currentArticleMeta = {
-    lawId: data.law_id,
-    number: data.article,
-    articleNum: Number.parseInt(data.article, 10) || 1,
-    lawName: data.law_name,
-  };
+function fillArticleNav(data) {
+  const prevBtn = $("article-prev");
+  const nextBtn = $("article-next");
+  const jump = $("article-jump");
 
+  if (data.prev_article) {
+    prevBtn.textContent = `السابقة: المادة (${data.prev_article_label})`;
+    prevBtn.dataset.article = data.prev_article;
+    prevBtn.dataset.label = data.prev_article_label;
+    prevBtn.removeAttribute("aria-disabled");
+  } else {
+    prevBtn.textContent = "لا مادة قبلها";
+    delete prevBtn.dataset.article;
+    delete prevBtn.dataset.label;
+    prevBtn.setAttribute("aria-disabled", "true");
+  }
+
+  if (data.next_article) {
+    nextBtn.textContent = `التالية: المادة (${data.next_article_label})`;
+    nextBtn.dataset.article = data.next_article;
+    nextBtn.dataset.label = data.next_article_label;
+    nextBtn.removeAttribute("aria-disabled");
+  } else {
+    nextBtn.textContent = "لا مادة بعدها";
+    delete nextBtn.dataset.article;
+    delete nextBtn.dataset.label;
+    nextBtn.setAttribute("aria-disabled", "true");
+  }
+
+  if (!jump.hidden) {
+    jump.value = data.article;
+  }
+}
+
+function fillArticle(data) {
+  currentArticle = data;
   $("article-title").textContent = `المادة (${data.article_label})`;
   $("article-law").textContent = data.law_name;
-
-  const articleTextNode = $("article-text");
-  articleTextNode.replaceChildren();
-
-  // Split text into paragraphs/clauses and format
-  const lines = data.text.split("\n");
-  lines.forEach((line) => {
-    const trimmed = line.trim();
-    if (!trimmed) return;
-
-    const p = el("p", "law-clause");
-    // Check if snippet text matches this paragraph
-    if (highlightSnippet && highlightSnippet.length > 15 && trimmed.includes(highlightSnippet.slice(0, 30))) {
-      const mark = el("mark", "cited-span", trimmed);
-      p.appendChild(mark);
-    } else {
-      p.textContent = trimmed;
-    }
-    articleTextNode.appendChild(p);
-  });
-
+  const law = lawsById.get(data.law_id);
+  $("article-version").textContent = law && law.version_ar ? law.version_ar : "";
+  $("article-text").textContent = data.text;
   const notes = $("article-notes");
   notes.replaceChildren(...(data.notes || []).map((note) => el("li", "", note)));
   $("article-notes-block").hidden = notes.children.length === 0;
-
   const href = safeHttpsUrl(data.source_url);
   const source = $("article-source");
   source.hidden = !href;
   if (href) source.href = href;
+  fillArticleNav(data);
   setArticleStatus("");
-
-  // Update navigation buttons
-  updateArticleNav();
 }
 
-function updateArticleNav() {
-  if (!currentArticleMeta) return;
-  const num = currentArticleMeta.articleNum;
-  const prevBtn = $("article-prev");
-  const nextBtn = $("article-next");
-  if (prevBtn) prevBtn.disabled = num <= 1;
-  if (nextBtn) {
-    const maxArticles = currentArticleMeta.lawId.includes("income") ? 82 : 78;
-    nextBtn.disabled = num >= maxArticles;
-  }
-}
-
-async function openArticle(lawId, article, label, lawName, trigger, highlightSnippet = "") {
+async function openArticle(lawId, article, label, lawName, trigger) {
   const dialog = $("article-dialog");
   const ticket = ++articleTicket;
-  articleTrigger = trigger || null;
+  if (!dialog.open) {
+    articleTrigger = trigger || null;
+  }
   $("article-title").textContent = `المادة (${label})`;
   $("article-law").textContent = lawName;
+  const law = lawsById.get(lawId);
+  $("article-version").textContent = law && law.version_ar ? law.version_ar : "";
   $("article-text").textContent = "";
   $("article-notes-block").hidden = true;
   $("article-source").hidden = true;
@@ -634,6 +574,31 @@ async function openArticle(lawId, article, label, lawName, trigger, highlightSni
   dialog.scrollTop = 0;
   $("close-article").focus();
 
+  const jump = $("article-jump");
+  loadArticleIndex(lawId)
+    .then((articles) => {
+      if (ticket !== articleTicket) return;
+      if (jump.dataset.lawId !== lawId) {
+        jump.dataset.lawId = lawId;
+        jump.replaceChildren(
+          ...articles.map((item) => {
+            const opt = document.createElement("option");
+            opt.value = item.article;
+            opt.textContent = `المادة (${item.article_label})`;
+            return opt;
+          })
+        );
+      }
+      jump.hidden = false;
+      if (currentArticle && currentArticle.law_id === lawId) {
+        jump.value = currentArticle.article;
+      }
+    })
+    .catch(() => {
+      if (ticket !== articleTicket) return;
+      jump.hidden = true;
+    });
+
   const key = `${lawId}/${article}`;
   try {
     let data = articleCache.get(key);
@@ -641,7 +606,7 @@ async function openArticle(lawId, article, label, lawName, trigger, highlightSni
       data = await fetchJson(`/laws/${encodeURIComponent(lawId)}/articles/${encodeURIComponent(article)}`);
       articleCache.set(key, data);
     }
-    if (ticket === articleTicket) fillArticle(data, highlightSnippet);
+    if (ticket === articleTicket) fillArticle(data);
   } catch (error) {
     if (ticket !== articleTicket) return;
     setArticleStatus(error instanceof ApiError ? error.message : ARTICLE_ERROR_TEXT, true);
@@ -651,28 +616,42 @@ async function openArticle(lawId, article, label, lawName, trigger, highlightSni
 function setupArticleDialog() {
   const dialog = $("article-dialog");
   $("close-article").addEventListener("click", () => dialog.close());
-
-  // Esc closes a modal <dialog> natively
+  $("article-prev").addEventListener("click", () => {
+    const btn = $("article-prev");
+    if (btn.getAttribute("aria-disabled") === "true" || !btn.dataset.article || !currentArticle) return;
+    openArticle(currentArticle.law_id, btn.dataset.article, btn.dataset.label, currentArticle.law_name);
+  });
+  $("article-next").addEventListener("click", () => {
+    const btn = $("article-next");
+    if (btn.getAttribute("aria-disabled") === "true" || !btn.dataset.article || !currentArticle) return;
+    openArticle(currentArticle.law_id, btn.dataset.article, btn.dataset.label, currentArticle.law_name);
+  });
+  $("article-jump").addEventListener("change", (event) => {
+    if (!currentArticle) return;
+    const article = event.target.value;
+    const label = event.target.selectedOptions[0]?.textContent.replace(/^المادة \(|\)$/g, "") || article;
+    openArticle(currentArticle.law_id, article, label, currentArticle.law_name);
+  });
+  // Esc closes a modal <dialog> natively (the "cancel" event); afterwards focus
+  // goes back to the button that opened it.
   dialog.addEventListener("close", () => {
     articleTicket += 1;
     if (articleTrigger && articleTrigger.isConnected) articleTrigger.focus();
     articleTrigger = null;
   });
-
-  // Light-dismiss with boundary check per modern-web-guidance
+  // A click on the backdrop lands on the <dialog> element outside its bounding rect.
   dialog.addEventListener("click", (event) => {
     if (event.target !== dialog) return;
     const rect = dialog.getBoundingClientRect();
-    const isDialogContent = (
+    const isInDialog =
       rect.top <= event.clientY &&
       event.clientY <= rect.top + rect.height &&
       rect.left <= event.clientX &&
-      event.clientX <= rect.left + rect.width
-    );
-    if (!isDialogContent) dialog.close();
+      event.clientX <= rect.left + rect.width;
+    if (!isInDialog) dialog.close();
   });
-
-  // Tab navigation trap
+  // showModal() already makes the page behind inert; this keeps Tab cycling
+  // inside the sheet instead of leaving for the browser's own toolbar.
   dialog.addEventListener("keydown", (event) => {
     if (event.key !== "Tab") return;
     const items = focusableIn(dialog);
@@ -687,40 +666,6 @@ function setupArticleDialog() {
       first.focus();
     }
   });
-
-  // Prev / Next button listeners
-  const prevBtn = $("article-prev");
-  if (prevBtn) {
-    prevBtn.addEventListener("click", () => {
-      if (!currentArticleMeta) return;
-      const targetNum = currentArticleMeta.articleNum - 1;
-      if (targetNum >= 1) {
-        openArticle(currentArticleMeta.lawId, String(targetNum), String(targetNum), currentArticleMeta.lawName, prevBtn);
-      }
-    });
-  }
-
-  const nextBtn = $("article-next");
-  if (nextBtn) {
-    nextBtn.addEventListener("click", () => {
-      if (!currentArticleMeta) return;
-      const targetNum = currentArticleMeta.articleNum + 1;
-      openArticle(currentArticleMeta.lawId, String(targetNum), String(targetNum), currentArticleMeta.lawName, nextBtn);
-    });
-  }
-
-  // Jump to article form
-  const jumpForm = $("article-jump-form");
-  if (jumpForm) {
-    jumpForm.addEventListener("submit", (e) => {
-      e.preventDefault();
-      const val = $("jump-number") ? $("jump-number").value.trim() : "";
-      if (val && currentArticleMeta) {
-        openArticle(currentArticleMeta.lawId, val, val, currentArticleMeta.lawName, $("jump-number"));
-        $("jump-number").value = "";
-      }
-    });
-  }
 }
 
 // ---- Turnstile ------------------------------------------------------------------
@@ -769,64 +714,6 @@ function resetCaptcha() {
   if (captcha.enabled && window.turnstile && captcha.widgetId !== null) window.turnstile.reset(captcha.widgetId);
 }
 
-// ---- Session Recent Questions History ------------------------------------
-
-const RECENT_KEY = "jo_tax_recent_asks";
-const MAX_RECENT = 5;
-
-function getRecentAsks() {
-  try {
-    const raw = sessionStorage.getItem(RECENT_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
-}
-
-function saveRecentAsk(question, lawVal, data, elapsed) {
-  try {
-    let list = getRecentAsks();
-    list = list.filter((item) => item.question !== question);
-    list.unshift({ question, lawVal, data, elapsed });
-    if (list.length > MAX_RECENT) list = list.slice(0, MAX_RECENT);
-    sessionStorage.setItem(RECENT_KEY, JSON.stringify(list));
-    renderRecentAsks();
-  } catch {
-    // quota
-  }
-}
-
-function renderRecentAsks() {
-  const container = $("recent-container");
-  const chipsNode = $("recent-chips");
-  if (!container || !chipsNode) return;
-
-  const list = getRecentAsks();
-  if (!list.length) {
-    container.hidden = true;
-    return;
-  }
-
-  chipsNode.replaceChildren();
-  list.forEach((item) => {
-    const chip = el("button", "recent-chip", item.question);
-    chip.type = "button";
-    chip.addEventListener("click", () => {
-      $("question").value = item.question;
-      updateCount();
-      if ($("law")) $("law").value = item.lawVal || "";
-      const select = $("law");
-      document.querySelectorAll(".law-pill").forEach((p) => {
-        p.setAttribute("aria-selected", p.dataset.value === (item.lawVal || "") ? "true" : "false");
-      });
-      renderAnswer(item.data, item.question, item.elapsed);
-      focusAnswer();
-    });
-    chipsNode.appendChild(chip);
-  });
-  container.hidden = false;
-}
-
 // ---- asking ----------------------------------------------------------------------
 
 function validateQuestion(question) {
@@ -861,9 +748,11 @@ function refreshButtons() {
   const blocked = isBlocked();
   const secondsLeft = lockSecondsLeft();
   const submit = $("submit");
-  for (const button of [submit, ...document.querySelectorAll("button.example")]) {
+  for (const button of [submit, ...document.querySelectorAll("button[data-question]")]) {
     button.setAttribute("aria-disabled", blocked ? "true" : "false");
   }
+  const scopeFieldset = $("scope");
+  if (scopeFieldset) scopeFieldset.disabled = inFlight;
   submit.textContent = !inFlight && secondsLeft > 0 ? `اسأل بعد ${clockText(secondsLeft)}` : SUBMIT_LABEL;
   $("ask-form").setAttribute("aria-busy", inFlight ? "true" : "false");
 }
@@ -887,7 +776,14 @@ function lockFor(seconds) {
 // Move focus to the answer only if the reader is still where they asked from.
 function focusAnswer() {
   const active = document.activeElement;
-  if (!active || active === document.body || $("ask-form").contains(active)) $("answer-title").focus();
+  if (
+    !active ||
+    active === document.body ||
+    $("ask-form").contains(active) ||
+    (active.matches && active.matches("button[data-question]"))
+  ) {
+    $("answer-title").focus();
+  }
 }
 
 async function onSubmit(event) {
@@ -907,14 +803,15 @@ async function onSubmit(event) {
     return;
   }
 
+  const request = { question, lawId: selectedLawId() };
+
   inFlight = true;
   refreshButtons();
   $("result").hidden = true;
   startProgress();
-  const startedAt = Date.now();
   try {
-    const body = { question };
-    if ($("law").value) body.law_id = $("law").value;
+    const body = { question: request.question };
+    if (request.lawId) body.law_id = request.lawId;
     const headers = { "Content-Type": "application/json" };
     if (captcha.enabled) headers["CF-Turnstile-Response"] = captcha.token;
     const data = await fetchJson(
@@ -926,11 +823,9 @@ async function onSubmit(event) {
       },
       REQUEST_TIMEOUT_MS,
     );
-    const elapsed = Math.round((Date.now() - startedAt) / 1000);
     stopProgress();
-    renderAnswer(data, question, elapsed);
+    renderAnswer(data, request);
     setStatus("done", "", data.refused ? REFUSAL_READY_TEXT : ANSWER_READY_TEXT);
-    saveRecentAsk(question, $("law").value, data, elapsed);
     focusAnswer();
   } catch (error) {
     stopProgress();
@@ -948,15 +843,13 @@ function onExample(event) {
   const question = event.currentTarget.dataset.question || "";
   $("question").value = question;
   updateCount();
-  $("law").value = ""; // the examples span both laws
+  const scopeAll = $("scope-all");
+  if (scopeAll) scopeAll.checked = true; // the examples span both laws
   $("ask-form").requestSubmit();
 }
 
 function updateCount() {
-  const len = $("question").value.length;
-  $("question-count").textContent = `${len} / ${MAX_QUESTION_CHARS}`;
-  const clearBtn = $("clear-question");
-  if (clearBtn) clearBtn.hidden = len === 0;
+  $("question-count").textContent = `${$("question").value.length} / ${MAX_QUESTION_CHARS}`;
 }
 
 function onQuestionInput() {
@@ -971,35 +864,31 @@ function onQuestionKeydown(event) {
   }
 }
 
-document.addEventListener("DOMContentLoaded", () => {
-  initTheme();
-  initLawPills();
-  initClearButton();
+function initAskForm() {
   $("ask-form").addEventListener("submit", onSubmit);
   $("question").addEventListener("input", onQuestionInput);
   $("question").addEventListener("keydown", onQuestionKeydown);
-  for (const button of document.querySelectorAll("button.example, button.guardrail-chip")) {
+  for (const button of document.querySelectorAll("button[data-question]")) {
     button.addEventListener("click", onExample);
   }
-  setupArticleDialog();
+  const copyBtn = $("copy-answer");
+  if (copyBtn) copyBtn.addEventListener("click", copyAnswer);
   updateCount();
   refreshButtons();
+  $("submit").disabled = false;
+}
+
+function runOptional(setup) {
+  try {
+    setup();
+  } catch {
+    // optional setup failure does not block asking
+  }
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  initAskForm();
   loadLaws();
   setupCaptcha();
-  renderRecentAsks();
-
-  // URL query pre-fill: ?q=...&law=...
-  const params = new URLSearchParams(window.location.search);
-  const qParam = params.get("q");
-  if (qParam) {
-    $("question").value = qParam;
-    updateCount();
-    const lawParam = params.get("law");
-    if (lawParam && $("law")) {
-      $("law").value = lawParam;
-      document.querySelectorAll(".law-pill").forEach((p) => {
-        p.setAttribute("aria-selected", p.dataset.value === lawParam ? "true" : "false");
-      });
-    }
-  }
+  runOptional(setupArticleDialog);
 });
