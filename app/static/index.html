@@ -6,8 +6,8 @@
   <title>قوانين الضرائب الأردنية: إجابات مستندة إلى المواد</title>
   <meta name="description" content="اسأل عن قانون ضريبة الدخل وقانون الضريبة العامة على المبيعات في الأردن، واحصل على إجابة من نص القانون مع رقم المادة، أو رفض صريح حين لا يجيب النص.">
   <meta name="color-scheme" content="light dark">
-  <meta name="theme-color" content="#f6f4ee" media="(prefers-color-scheme: light)">
-  <meta name="theme-color" content="#0b111e" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#141d1a" media="(prefers-color-scheme: dark)">
   <meta property="og:type" content="website">
   <meta property="og:locale" content="ar_JO">
   <meta property="og:site_name" content="قوانين الضرائب الأردنية">
@@ -15,6 +15,7 @@
   <meta property="og:description" content="إجابات من نص قانون ضريبة الدخل وقانون الضريبة العامة على المبيعات، مع رقم المادة لكل إجابة، ورفض صريح حين لا يجيب النص. ليست استشارة قانونية.">
   <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
   <link rel="preload" href="/static/fonts/ibm-plex-sans-arabic-arabic-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/static/fonts/ibm-plex-sans-arabic-arabic-600-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="/static/style.css">
   <script src="/static/app.js" defer></script>
 </head>
@@ -24,44 +25,40 @@
   <header class="site-header">
     <div class="container site-header-inner">
       <a class="brand" href="/">
-        <span class="brand-crest" aria-hidden="true">
-          <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
-            <path d="M12 2L4 7v6c0 5.55 3.84 10.74 8 12 4.16-1.26 8-6.45 8-12V7l-8-5zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V8.26l7-4.38v8.12z"/>
-          </svg>
-        </span>
+        <svg class="brand-mark" viewBox="0 0 32 32" width="36" height="36" aria-hidden="true" focusable="false">
+          <rect x="2" y="2" width="28" height="28" rx="7" class="brand-mark-tile" fill="#0b5c4a"/>
+          <path d="M10 8h12v16H10z" class="brand-mark-page" fill="#ffffff"/>
+          <path d="M12.5 12h7M12.5 15.5h7M12.5 19h4.5" class="brand-mark-lines" fill="none" stroke="#0b5c4a" stroke-width="1.6" stroke-linecap="round"/>
+        </svg>
         <span class="brand-text">
           <span class="brand-title">قوانين الضرائب الأردنية</span>
-          <span class="brand-subtitle">استرجاع مدعّم بالنصوص التشريعية</span>
+          <span class="brand-subtitle">إجابات من نص القانون، مع رقم المادة</span>
         </span>
       </a>
-      <nav class="site-nav" aria-label="روابط المشروع">
+      <nav class="site-nav" aria-label="روابط الموقع">
         <ul>
           <li><a href="#how">كيف يعمل</a></li>
+          <li><a href="#evaluation">التقييم</a></li>
           <li><a href="https://github.com/Abdullah-AbuHatab/jo-tax-law-rag">الشيفرة على GitHub</a></li>
-          <li><a href="/docs">توثيق الواجهة البرمجية</a></li>
+          <li><a href="/docs">الواجهة البرمجية</a></li>
         </ul>
       </nav>
     </div>
   </header>
 
-  <div class="container">
-    <main class="workspace">
-      <div class="hero">
-        <h1>اسأل نصّ القانون، واحصل على رقم المادة</h1>
-        <p class="lead">إجابات مستندة حصراً إلى نصوص قانون ضريبة الدخل وقانون الضريبة العامة على المبيعات، مع ذكر المادة لكل حكم، ورفض صريح عند عدم توفر الإجابة.</p>
-        <p class="disclaimer" role="note">
-          <strong>تنبيه:</strong> معلومات من نص القانون، وليست استشارة قانونية. قد لا تكون النصوص محدّثة، فراجع النص الرسمي.
-        </p>
-      </div>
+  <main class="container workspace">
+    <div class="hero">
+      <p class="eyebrow">مساعد بحث في التشريع الضريبي الأردني</p>
+      <h1>اسأل نصّ القانون، واحصل على رقم المادة</h1>
+      <p class="lead">إجابات مستندة حصراً إلى نصوص قانون ضريبة الدخل وقانون الضريبة العامة على المبيعات، مع ذكر المادة لكل حكم، ورفض صريح عند عدم توفر الإجابة.</p>
+    </div>
 
-      <form id="ask-form" class="ask" method="post" novalidate aria-label="اطرح سؤالك">
+    <form id="ask-form" class="ask" method="post" novalidate aria-label="اطرح سؤالك">
+      <div class="composer">
         <div class="field-header">
           <label class="field-label" for="question">سؤالك</label>
           <span class="kbd-hint">للإرسال: <kbd dir="ltr">Ctrl + Enter</kbd></span>
         </div>
-        <p id="privacy-notice" class="privacy" role="note">
-          <strong>الخصوصية:</strong> يُرسل سؤالك إلى مزوّدَي ذكاء اصطناعي خارجيين (Google Gemini وOpenRouter)، فلا تكتب فيه بيانات شخصية.
-        </p>
         <textarea id="question" name="question" rows="3" maxlength="1000" required dir="auto"
           aria-describedby="privacy-notice question-error"
           placeholder="مثال: ما هي الإعفاءات الشخصية للمقيم في ضريبة الدخل؟"></textarea>
@@ -83,155 +80,187 @@
           </fieldset>
           <button id="submit" class="button-primary" type="submit" disabled>اسأل</button>
         </div>
-
-        <div class="examples" role="group" aria-labelledby="examples-title">
-          <p id="examples-title" class="examples-title">أو اختر أحد الأسئلة المجربة:</p>
-          <div class="examples-list">
-            <button type="button" class="example" data-question="ما هي نسبة الضريبة العامة على المبيعات؟">نسبة ضريبة المبيعات العامة</button>
-            <button type="button" class="example" data-question="كم يبلغ الإعفاء الشخصي للشخص الطبيعي المقيم في قانون ضريبة الدخل؟">الإعفاء الشخصي في ضريبة الدخل</button>
-            <button type="button" class="example" data-question="هل الراتب التقاعدي الشهري معفى من ضريبة الدخل؟">هل الراتب التقاعدي معفى؟</button>
-            <button type="button" class="example" data-question="خلال كم يوماً يتم رد ضريبة المبيعات بعد تقديم طلب الرد؟">مدة رد ضريبة المبيعات</button>
-            <button type="button" class="demo-question" data-question="كيف أجدد جواز السفر الأردني؟" data-demo="gate-refusal">سؤال خارج القانونين (تجربة الرفض)</button>
-          </div>
-        </div>
-      </form>
-
-      <div id="status-area" class="status-area" data-state="idle">
-        <div id="status" class="status" role="status" aria-live="polite" aria-atomic="true"></div>
-        <div id="progress" class="progress" hidden>
-          <div class="progress-track" aria-hidden="true"><div class="progress-bar"></div></div>
-          <p class="progress-time" aria-hidden="true">الوقت المنقضي: <span id="progress-elapsed" dir="ltr">0:00</span></p>
-        </div>
       </div>
 
-      <section id="result" class="result" hidden aria-labelledby="answer-title">
-        <div class="result-main">
-          <div id="result-badge" class="result-badge" hidden>
-            <span class="badge-icon" aria-hidden="true">✓</span>
-            <span id="badge-text" class="badge-text">كل مادة مذكورة هنا استُرجعت فعلاً لهذا السؤال</span>
-          </div>
+      <p id="privacy-notice" class="privacy" role="note">
+        <svg class="inline-icon" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="5" y="10.5" width="14" height="10" rx="2"/>
+          <path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/>
+        </svg>
+        <span><strong>الخصوصية:</strong> يُرسل سؤالك إلى مزوّدَي ذكاء اصطناعي خارجيين (Google Gemini وOpenRouter)، فلا تكتب فيه بيانات شخصية.</span>
+      </p>
 
-          <div class="result-head">
-            <h2 id="answer-title" tabindex="-1">الإجابة</h2>
-            <button id="copy-answer" type="button" class="text-button">نسخ الإجابة مع أرقام المواد</button>
-          </div>
+      <div class="examples" role="group" aria-labelledby="examples-title">
+        <p id="examples-title" class="examples-title">أو اختر أحد الأسئلة المجربة:</p>
+        <div class="examples-list">
+          <button type="button" class="example" data-question="ما هي نسبة الضريبة العامة على المبيعات؟">نسبة ضريبة المبيعات العامة</button>
+          <button type="button" class="example" data-question="كم يبلغ الإعفاء الشخصي للشخص الطبيعي المقيم في قانون ضريبة الدخل؟">الإعفاء الشخصي في ضريبة الدخل</button>
+          <button type="button" class="example" data-question="هل الراتب التقاعدي الشهري معفى من ضريبة الدخل؟">هل الراتب التقاعدي معفى؟</button>
+          <button type="button" class="example" data-question="خلال كم يوماً يتم رد ضريبة المبيعات بعد تقديم طلب الرد؟">مدة رد ضريبة المبيعات</button>
+          <button type="button" class="demo-question" data-question="كيف أجدد جواز السفر الأردني؟" data-demo="gate-refusal">سؤال خارج القانونين (تجربة الرفض)</button>
+        </div>
+      </div>
+    </form>
 
-          <div class="result-echo">
-            <p class="result-question">سؤالك: <bdi id="result-question"></bdi></p>
-            <p class="result-question">نطاق البحث: <span id="result-scope"></span></p>
-          </div>
+    <aside class="library" aria-labelledby="coverage-title">
+      <h2 id="coverage-title">النصوص المشمولة</h2>
+      <p id="coverage-status" class="muted">جارٍ تحميل قائمة القوانين…</p>
+      <ul id="coverage" class="coverage" hidden></ul>
+      <p class="disclaimer" role="note">
+        <strong>تنبيه:</strong> معلومات من نص القانون، وليست استشارة قانونية. قد لا تكون النصوص محدّثة، فراجع النص الرسمي.
+      </p>
+    </aside>
 
-          <div id="answer" class="answer"></div>
+    <div id="status-area" class="status-area" data-state="idle">
+      <div id="status" class="status" role="status" aria-live="polite" aria-atomic="true"></div>
+      <div id="progress" class="progress" hidden>
+        <div class="progress-track" aria-hidden="true"><div class="progress-bar"></div></div>
+        <p class="progress-time" aria-hidden="true">الوقت المنقضي: <span id="progress-elapsed" dir="ltr">0:00</span></p>
+      </div>
+    </div>
 
-          <div id="refusal" class="refusal" hidden>
-            <h3>لا توجد إجابة في النصوص المتوفرة</h3>
-            <p id="refusal-reason"></p>
-            <p class="refusal-hint">جرّب صياغة أخرى أو كلمات من نص القانون نفسه، أو اختر القانون المعني من «نطاق البحث». تغطي الأداة قانونَي ضريبة الدخل والضريبة العامة على المبيعات فقط.</p>
-          </div>
-
-          <p id="result-disclaimer" class="result-disclaimer"></p>
+    <section id="result" class="result" hidden aria-labelledby="answer-title">
+      <div class="result-main">
+        <div id="result-badge" class="result-badge" hidden>
+          <svg class="badge-icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M5 12.5l4.5 4.5L19 7.5"/>
+          </svg>
+          <span id="badge-text" class="badge-text">كل مادة مذكورة هنا استُرجعت فعلاً لهذا السؤال</span>
         </div>
 
-        <div class="result-evidence">
-          <section id="citations-block" class="citations-block" hidden aria-labelledby="citations-title">
-            <h3 id="citations-title">المواد التي استندت إليها الإجابة</h3>
-            <ul id="citations" class="citations"></ul>
-          </section>
+        <div class="result-head">
+          <h2 id="answer-title" tabindex="-1">الإجابة</h2>
+          <button id="copy-answer" type="button" class="button-quiet">نسخ الإجابة مع أرقام المواد</button>
+        </div>
 
-          <details id="retrieval-block" class="details telemetry-block">
-            <summary class="telemetry-summary">
-              <span class="telemetry-title">تفاصيل الاسترجاع الهندسي</span>
-              <span id="telemetry-chips" class="telemetry-chips"></span>
-            </summary>
-            <div class="telemetry-panel">
-              <div id="telemetry-metrics" class="telemetry-metrics"></div>
-              <p id="model" class="details-model" hidden></p>
-              <div class="table-scroll">
-                <table>
-                  <caption>أجزاء المواد التي استرجعها البحث، الأقرب أولاً</caption>
-                  <thead>
-                    <tr>
-                      <th scope="col">القانون</th>
-                      <th scope="col">المادة</th>
-                      <th scope="col">الجزء</th>
-                      <th scope="col">درجة التشابه</th>
-                    </tr>
-                  </thead>
-                  <tbody id="retrieved"></tbody>
-                </table>
-              </div>
-              <p id="dropped" class="details-dropped" hidden></p>
-              <div class="telemetry-actions">
-                <button id="copy-json" type="button" class="text-button">نسخ استجابة JSON الأصلية</button>
-                <span class="telemetry-footnote">القيم أعلاه من استجابة هذا الطلب نفسه، والزمن مقيس في متصفحك.</span>
-              </div>
+        <dl class="result-echo">
+          <div>
+            <dt>سؤالك</dt>
+            <dd><bdi id="result-question"></bdi></dd>
+          </div>
+          <div>
+            <dt>نطاق البحث</dt>
+            <dd id="result-scope"></dd>
+          </div>
+        </dl>
+
+        <div id="answer" class="answer"></div>
+
+        <div id="refusal" class="refusal" hidden>
+          <h3>لا توجد إجابة في النصوص المتوفرة</h3>
+          <p id="refusal-reason"></p>
+          <p class="refusal-hint">جرّب صياغة أخرى أو كلمات من نص القانون نفسه، أو اختر القانون المعني من «نطاق البحث». تغطي الأداة قانونَي ضريبة الدخل والضريبة العامة على المبيعات فقط.</p>
+        </div>
+
+        <p id="result-disclaimer" class="result-disclaimer"></p>
+      </div>
+
+      <div class="result-evidence">
+        <section id="citations-block" class="citations-block" hidden aria-labelledby="citations-title">
+          <h3 id="citations-title">المواد التي استندت إليها الإجابة</h3>
+          <ul id="citations" class="citations"></ul>
+        </section>
+
+        <details id="retrieval-block" class="telemetry-block">
+          <summary class="telemetry-summary">
+            <span class="telemetry-title">تفاصيل البحث والتحقق</span>
+            <span id="telemetry-chips" class="telemetry-chips"></span>
+          </summary>
+          <div class="telemetry-panel">
+            <div id="telemetry-metrics" class="telemetry-metrics"></div>
+            <p id="model" class="details-model" hidden></p>
+            <div class="table-scroll">
+              <table>
+                <caption>أجزاء المواد التي استرجعها البحث، الأقرب أولاً</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">القانون</th>
+                    <th scope="col">المادة</th>
+                    <th scope="col">الجزء</th>
+                    <th scope="col">درجة التشابه</th>
+                  </tr>
+                </thead>
+                <tbody id="retrieved"></tbody>
+              </table>
             </div>
-          </details>
-        </div>
-      </section>
-    </main>
+            <p id="dropped" class="details-dropped" hidden></p>
+            <div class="telemetry-actions">
+              <button id="copy-json" type="button" class="button-quiet">نسخ استجابة JSON الأصلية</button>
+              <span class="telemetry-footnote">القيم أعلاه من استجابة هذا الطلب نفسه، والزمن مقيس في متصفحك.</span>
+            </div>
+          </div>
+        </details>
+      </div>
+    </section>
+  </main>
 
-    <section id="about-band" class="about-band" aria-label="عن الأداة">
-      <section class="about-section" aria-labelledby="coverage-title">
-        <h2 id="coverage-title">النصوص المشمولة</h2>
-        <p id="coverage-status" class="muted">جارٍ تحميل قائمة القوانين…</p>
-        <ul id="coverage" class="coverage" hidden></ul>
-      </section>
+  <div class="container about">
+    <section id="how" class="about-section how" aria-labelledby="how-title">
+      <h2 id="how-title">كيف يعمل</h2>
+      <p class="section-lead">لا يجيب النظام من ذاكرة النموذج اللغوي، بل من نصوص المواد نفسها، والشيفرة هي التي تقرر ما يُعرض عليك.</p>
+      <ol class="steps">
+        <li>
+          <h3>البحث</h3>
+          <p>يُحوَّل سؤالك إلى تمثيل رقمي (<bdi>embedding</bdi>) ويُقارَن بأجزاء مواد القانونين، فتُسترجع أقرب خمسة أجزاء.</p>
+        </li>
+        <li>
+          <h3>بوابة الرفض</h3>
+          <p>إن كانت أعلى درجة تشابه دون العتبة (<bdi>0.60</bdi>)، يُرفض السؤال قبل استدعاء النموذج اللغوي.</p>
+        </li>
+        <li>
+          <h3>الصياغة</h3>
+          <p>يتلقى النموذج نصوص المواد المسترجعة وحدها، ويعيد إجابة منظمة تذكر المواد التي استند إليها.</p>
+        </li>
+        <li>
+          <h3>التحقق</h3>
+          <p>لا يُقبل استشهاد إلا إذا أشار إلى مادة استُرجعت فعلاً لهذا السؤال، والإجابة التي لا يبقى لها استشهاد صالح تتحول إلى رفض.</p>
+        </li>
+      </ol>
+    </section>
 
-      <section id="how" class="about-section" aria-labelledby="how-title">
-        <h2 id="how-title">كيف يعمل</h2>
-        <p>لا يجيب النظام من ذاكرة النموذج اللغوي، بل من نصوص المواد نفسها، والشيفرة هي التي تقرر ما يُعرض عليك.</p>
-        <ol class="steps">
-          <li><strong>البحث:</strong> يُحوَّل سؤالك إلى تمثيل رقمي (<bdi>embedding</bdi>) ويُقارَن بأجزاء مواد القانونين، فتُسترجع أقرب خمسة أجزاء.</li>
-          <li><strong>بوابة الرفض:</strong> إن كانت أعلى درجة تشابه دون العتبة (0.60)، يُرفض السؤال قبل استدعاء النموذج اللغوي.</li>
-          <li><strong>الصياغة:</strong> يتلقى النموذج نصوص المواد المسترجعة وحدها، ويعيد إجابة منظمة تذكر المواد التي استند إليها.</li>
-          <li><strong>التحقق:</strong> لا يُقبل استشهاد إلا إذا أشار إلى مادة استُرجعت فعلاً لهذا السؤال، والإجابة التي لا يبقى لها استشهاد صالح تتحول إلى رفض.</li>
-        </ol>
-        <ul class="links">
-          <li><a href="https://github.com/Abdullah-AbuHatab/jo-tax-law-rag">الشيفرة المصدرية على GitHub</a></li>
-          <li><a href="/docs">توثيق الواجهة البرمجية (<bdi>OpenAPI</bdi>)</a></li>
-        </ul>
-      </section>
+    <section id="evaluation" class="about-section evaluation" aria-labelledby="eval-title">
+      <h2 id="eval-title">التقييم</h2>
+      <table class="eval-table">
+        <caption>تشغيل حقيقي بتاريخ <bdi dir="ltr">2026-10-24</bdi> على 32 سؤالاً عربياً: 26 لها إجابة في القانونين، و6 خارج نطاقهما منها محاولة حقن تعليمات.</caption>
+        <tbody>
+          <tr>
+            <th scope="row">استرجاع المادة الصحيحة <span class="eval-note">المادة المتوقعة ضمن أول خمس نتائج في 25 من 26 سؤالاً (<bdi>recall@5</bdi>).</span></th>
+            <td><bdi>96.2%</bdi></td>
+          </tr>
+          <tr>
+            <th scope="row">دقة الرفض <span class="eval-note">رُفضت الأسئلة الستة خارج النطاق، ولم يُرفض أي سؤال له إجابة.</span></th>
+            <td><bdi>100%</bdi></td>
+          </tr>
+          <tr>
+            <th scope="row">صلاحية الاستشهادات <span class="eval-note">لم يُستبعد عند التحقق أي استشهاد اقترحه النموذج.</span></th>
+            <td><bdi>100%</bdi></td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="muted">32 سؤالاً عيّنة صغيرة، فهذه الأرقام تصف هذه المجموعة وحدها ولا تضمن صحة كل إجابة.</p>
+      <p><a class="standalone-link" href="https://github.com/Abdullah-AbuHatab/jo-tax-law-rag/blob/main/eval/results.md">النتائج الكاملة لكل سؤال</a></p>
+    </section>
 
-      <section class="about-section" aria-labelledby="eval-title">
-        <h2 id="eval-title">التقييم</h2>
-        <table class="eval-table">
-          <caption>تشغيل حقيقي بتاريخ 2026-10-24 على 32 سؤالاً عربياً: 26 لها إجابة في القانونين، و6 خارج نطاقهما منها محاولة حقن تعليمات.</caption>
-          <tbody>
-            <tr>
-              <th scope="row">استرجاع المادة الصحيحة <span class="eval-note">المادة المتوقعة ضمن أول خمس نتائج في 25 من 26 سؤالاً (<bdi>recall@5</bdi>).</span></th>
-              <td><bdi>96.2%</bdi></td>
-            </tr>
-            <tr>
-              <th scope="row">دقة الرفض <span class="eval-note">رُفضت الأسئلة الستة خارج النطاق، ولم يُرفض أي سؤال له إجابة.</span></th>
-              <td><bdi>100%</bdi></td>
-            </tr>
-            <tr>
-              <th scope="row">صلاحية الاستشهادات <span class="eval-note">لم يُستبعد عند التحقق أي استشهاد اقترحه النموذج.</span></th>
-              <td><bdi>100%</bdi></td>
-            </tr>
-          </tbody>
-        </table>
-        <p class="muted">32 سؤالاً عيّنة صغيرة، فهذه الأرقام تصف هذه المجموعة وحدها ولا تضمن صحة كل إجابة.</p>
-        <p><a class="standalone-link" href="https://github.com/Abdullah-AbuHatab/jo-tax-law-rag/blob/main/eval/results.md">النتائج الكاملة لكل سؤال</a></p>
-      </section>
-
-      <section class="about-section in-english" lang="en" dir="ltr" aria-labelledby="english-title">
-        <h2 id="english-title">In English</h2>
-        <p>Arabic question answering over two Jordanian tax laws. Answers come only from the law text, every citation is checked in code against the articles actually retrieved, and the system refuses when the laws do not answer. Not legal advice.</p>
-      </section>
+    <section class="about-section in-english" lang="en" dir="ltr" aria-labelledby="english-title">
+      <h2 id="english-title">In English</h2>
+      <p>Arabic question answering over two Jordanian tax laws. Answers come only from the law text, every citation is checked in code against the articles actually retrieved, and the system refuses when the laws do not answer. Not legal advice.</p>
     </section>
   </div>
 
   <footer class="site-footer">
-    <div class="container">
+    <div class="container site-footer-inner">
       <p>المصدر: النصوص الموحدة المنشورة على موقع دائرة ضريبة الدخل والمبيعات. الشيفرة مفتوحة المصدر بترخيص <bdi>MIT</bdi>.</p>
+      <ul class="footer-links">
+        <li><a href="https://github.com/Abdullah-AbuHatab/jo-tax-law-rag">الشيفرة المصدرية على GitHub</a></li>
+        <li><a href="/docs">توثيق الواجهة البرمجية (<bdi>OpenAPI</bdi>)</a></li>
+        <li><a href="https://github.com/Abdullah-AbuHatab/jo-tax-law-rag/security/policy">الإبلاغ عن ثغرة أمنية</a></li>
+      </ul>
     </div>
   </footer>
 
   <dialog id="article-dialog" class="sheet" aria-labelledby="article-title">
     <div class="sheet-head">
-      <div>
+      <div class="sheet-heading">
         <p id="article-law" class="sheet-law"></p>
         <p id="article-version" class="sheet-version"></p>
         <h2 id="article-title">نص المادة</h2>
@@ -242,10 +271,10 @@
         </svg>
       </button>
       <nav class="sheet-nav" aria-label="التنقل بين المواد">
-        <button id="article-prev" type="button" class="text-button">السابقة</button>
+        <button id="article-prev" type="button" class="nav-button nav-prev">السابقة</button>
         <label for="article-jump" class="visually-hidden">انتقل إلى مادة</label>
         <select id="article-jump" hidden></select>
-        <button id="article-next" type="button" class="text-button">التالية</button>
+        <button id="article-next" type="button" class="nav-button nav-next">التالية</button>
       </nav>
     </div>
     <div class="sheet-body">

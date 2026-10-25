@@ -152,6 +152,26 @@ def test_answer_actions_are_honest_and_portable():
     assert "matchAll(ARTICLE_MENTION)" in SCRIPT
 
 
+def test_script_uses_no_string_to_code_sinks():
+    # The page CSP enforces Trusted Types with no policy, so any of these would throw in
+    # the browser. Turnstile's script.src is the one allowed sink: its CSP has no Trusted Types.
+    code = re.sub(r"^\s*//.*$", "", SCRIPT, flags=re.M)  # comments may name the sinks
+    for sink in ("innerHTML", "outerHTML", "insertAdjacentHTML", "document.write", "eval(", "new Function"):
+        assert sink not in code, sink
+    assert code.count(".src =") == 1 and "script.src = TURNSTILE_SCRIPT" in code
+    assert 'setAttribute("style"' not in code  # the CSP has no 'unsafe-inline' for styles
+
+
+def test_hidden_always_wins_over_component_display():
+    # Component rules live in cascade layers; the one unlayered [hidden] rule outranks them,
+    # so a class that sets display (grid, flex) can never show an element the script hid.
+    preludes = top_level_preludes(CSS)
+    assert preludes[-1] == "[hidden]"
+    unlayered = [p for p in preludes if not p.startswith("@")]
+    assert unlayered == ["[hidden]"], unlayered
+    assert all(p.startswith(("@font-face", "@layer")) for p in preludes if p.startswith("@"))
+
+
 def test_app_uses_no_client_storage():
     assert "localStorage" not in SCRIPT and "sessionStorage" not in SCRIPT
 

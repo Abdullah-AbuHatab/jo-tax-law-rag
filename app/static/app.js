@@ -165,34 +165,59 @@ function lawShortName(lawId) {
   return law ? law.short_name || law.name : lawId;
 }
 
+// A value that must read left to right inside Arabic text (dates, scores, codes).
+function ltr(text) {
+  const node = el("bdi", "", text);
+  node.dir = "ltr";
+  return node;
+}
+
+// One <div><dt/><dd/></div> pair for a <dl>.
+function fact(label, value) {
+  const row = el("div");
+  const dd = el("dd");
+  dd.append(value);
+  row.append(el("dt", "", `${label}:`), dd);
+  return row;
+}
+
 function renderCoverage(laws) {
   const list = $("coverage");
   list.replaceChildren();
   for (const law of laws) {
-    const item = el("li");
-    item.append(el("span", "coverage-name", law.name));
+    const item = el("li", "coverage-item");
+    const shortName = law.short_name || law.name;
+    item.append(el("span", "coverage-name", shortName));
+    // The rest of the official name ("رقم (34) لسنة 2014 وتعديلاته"), as the server gives it.
+    const reference = law.name.startsWith(shortName) ? law.name.slice(shortName.length).trim() : "";
+    if (reference) {
+      item.append(el("span", "coverage-ref", reference));
+    }
     if (law.version_ar) {
       item.append(el("span", "coverage-meta", law.version_ar));
     }
-    item.append(el("span", "coverage-meta", `عدد المواد: ${law.article_count}`));
+    const facts = el("dl", "coverage-facts");
+    facts.append(fact("عدد المواد", String(law.article_count)), fact("أُخذ النص في", ltr(law.retrieved)));
+    item.append(facts);
     if (law.coverage_note_ar) {
-      item.append(el("span", "coverage-meta", law.coverage_note_ar));
+      item.append(el("span", "coverage-note", law.coverage_note_ar));
     }
-    item.append(el("span", "coverage-meta", `أُخذ النص من المصدر في ${law.retrieved}`));
 
+    const actions = el("div", "coverage-actions");
     const browseBtn = el("button", "text-button", "تصفّح مواد القانون");
     browseBtn.type = "button";
     browseBtn.setAttribute("aria-haspopup", "dialog");
     browseBtn.addEventListener("click", () => openArticle(law.law_id, "1", "1", law.name, browseBtn));
-    item.append(browseBtn);
+    actions.append(browseBtn);
 
     const href = safeHttpsUrl(law.source_url);
     if (href) {
       const link = el("a", "", "النص الرسمي (ملف خارجي)");
       link.href = href;
       link.rel = "noopener noreferrer";
-      item.append(link);
+      actions.append(link);
     }
+    item.append(actions);
     list.appendChild(item);
   }
   list.hidden = laws.length === 0;
@@ -293,7 +318,13 @@ function stopProgress() {
 
 // ---- the answer --------------------------------------------------------------
 
-const ARTICLE_MENTION = /(?:ال)?ماد[ةه]\s*\(?\s*([0-9\u0660-\u0669\u06F0-\u06F9]{1,4})\s*(مكرر)?\s*\)?(?:\s*(مكرر))?/gu;
+// The whole word is the link, with its attached prefixes ("للمادة", "وبالمادة"), so a link
+// never splits a word the way "لل" + "مادة 9" used to. No lookbehind: Safari before 16.4 cannot parse
+// one, and the whole script would fail; renderAnswerText checks the letter before instead.
+const ARTICLE_MENTION =
+  /(?:[وف]?(?:بال|كال|لل|ال|[بلك])|[وف])?ماد[ةه]\s*(?:\(\s*)?([0-9\u0660-\u0669\u06F0-\u06F9]{1,4})(?![0-9\u0660-\u0669\u06F0-\u06F9])\s*(مكرر)?\s*\)?(?:\s*(مكرر))?/gu;
+
+const ARABIC_LETTER = /[\u0621-\u064A]/u;
 
 function toAsciiDigits(text) {
   return text
@@ -332,7 +363,9 @@ function renderAnswerText(container, text, citations) {
     const digits = toAsciiDigits(match[1]);
     const hasBis = Boolean(match[2] || match[3]);
     const articleKey = hasBis ? `${digits}bis` : digits;
-    const citation = targets.get(articleKey);
+    // A match that starts inside a word ("اعتماده 5") names no article.
+    const insideWord = matchIndex > 0 && ARABIC_LETTER.test(text[matchIndex - 1]);
+    const citation = insideWord ? undefined : targets.get(articleKey);
 
     if (citation) {
       const btn = el("button", "article-link", match[0]);
@@ -437,23 +470,42 @@ function renderBadge(data) {
   badge.hidden = false;
 }
 
+// A share of the bar, 0-100, for a similarity score shown on a 0-1 scale.
+function scorePercent(score) {
+  return `${Math.round(Math.min(1, Math.max(0, score)) * 100)}%`;
+}
+
+// The score as text, plus a bar with the gate's threshold marked on it. Widths are set
+// through CSSOM (style.setProperty), which the page CSP allows; style="" would not be.
+function scoreMeter(score) {
+  const meter = el("div", "score");
+  const track = el("span", "score-track");
+  track.setAttribute("aria-hidden", "true");
+  if (Number.isFinite(score)) {
+    const fill = el("span", "score-fill");
+    fill.style.setProperty("inline-size", scorePercent(score));
+    track.append(fill);
+  }
+  if (appConfig.minSimilarity !== null) {
+    const threshold = el("span", "score-threshold");
+    threshold.style.setProperty("inset-inline-start", scorePercent(appConfig.minSimilarity));
+    track.append(threshold);
+  }
+  const value = el("span", "score-value");
+  value.append("درجة التشابه: ", ltr(Number.isFinite(score) ? score.toFixed(SCORE_DIGITS) : "—"));
+  meter.append(track, value);
+  return meter;
+}
+
 function renderCitations(citations) {
   const list = $("citations");
   list.replaceChildren();
   citations.forEach((citation, index) => {
     const item = el("li", "citation");
-    const top = el("div", "citation-top");
     const ref = el("p", "citation-ref");
     const lawName = el("span", "citation-law", citation.law_name);
     lawName.id = `citation-law-${index}`;
     ref.append(el("span", "citation-article", `المادة (${citation.article_label})`), lawName);
-
-    const score = Number(citation.score);
-    const scoreEl = el("span", "citation-score");
-    const bdi = el("bdi", "", Number.isFinite(score) ? score.toFixed(SCORE_DIGITS) : "—");
-    bdi.dir = "ltr";
-    scoreEl.append("درجة التشابه: ", bdi);
-    top.append(ref, scoreEl);
 
     const quote = el("blockquote", "law-quote", citation.snippet);
 
@@ -464,7 +516,7 @@ function renderCitations(citations) {
     open.addEventListener("click", (event) =>
       openArticle(citation.law_id, citation.article, citation.article_label, citation.law_name, event.currentTarget),
     );
-    item.append(top, quote, open);
+    item.append(ref, scoreMeter(Number(citation.score)), quote, open);
     list.appendChild(item);
   });
   $("citations-block").hidden = citations.length === 0;
