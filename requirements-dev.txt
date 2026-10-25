@@ -1,3 +1,5 @@
 -r requirements.txt
 pytest==9.1.1
 ruff==0.17.2
+# Dev/CI only: checks requirements.txt against known vulnerabilities (OSV / PyPI advisories).
+pip-audit==2.10.1

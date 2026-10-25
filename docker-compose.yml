@@ -8,7 +8,8 @@
 
 services:
   db:
-    image: pgvector/pgvector:pg16
+    # pgvector/pgvector:pg16, pinned by digest (multi-arch index, resolved 2026-10-25)
+    image: pgvector/pgvector:pg16@sha256:7b822b0aac60967beb1ea5e576b8602c94c300a157d187f385ae3e0da199b90a
     environment:
       POSTGRES_USER: rag
       POSTGRES_PASSWORD: rag-local-only   # local container only; Neon credentials never go here
@@ -30,6 +31,9 @@ services:
         required: false
     environment:
       DATABASE_URL: postgresql://rag:rag-local-only@db:5432/rag
+      # Local only: the container connects as the local owner role, so it may create the
+      # schema on first use, as before. On Render the web service never migrates.
+      RUN_MIGRATIONS: "true"
       EMBEDDER: ${EMBEDDER:-gemini}
       LLM: ${LLM:-openrouter}
       PORT: "8000"
