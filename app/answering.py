@@ -153,15 +153,23 @@ REAL_TLDS = (
     "ye",
 )
 _TLD = "(?:" + "|".join(sorted(REAL_TLDS, key=len, reverse=True)) + ")"
+# Every repeat in the e-mail and bare-domain branches is bounded: open-ended ones made
+# this pattern backtrack in quadratic time on model output such as "a.a.a.…" (seconds of
+# CPU per answer). The bounds are DNS's own: a label has at most 63 characters, and an
+# e-mail local part at most 64 (a longer one still loses its last 64 characters and the
+# domain to the placeholder). Host names are capped at about a dozen labels.
+_LABEL = "[A-Za-z0-9-]{1,63}"
 # URLs (with a scheme, or starting with www.), e-mail addresses, and bare domains such
 # as evil.com/pay. ASCII lookarounds instead of \b, so an Arabic letter written right
-# against the domain (a joined "و") does not hide it.
+# against the domain (a joined "و") does not hide it. Leading hyphens are part of the
+# match, so "-evil.com" (read as evil.com) is replaced too.
 _LINK = re.compile(
     "(?:https?://|www" + _DOT + ")[^\\s<>\"'«»]+"
-    "|[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:" + _DOT + "[A-Za-z0-9-]+)+"
-    "|(?<![A-Za-z0-9-])[A-Za-z0-9][A-Za-z0-9-]*(?:"
+    "|[A-Za-z0-9._%+-]{1,64}@" + _LABEL + "(?:" + _DOT + _LABEL + "){1,10}"
+    "|(?<![A-Za-z0-9-])-*[A-Za-z0-9][A-Za-z0-9-]{0,62}(?:"
     + _DOT
-    + "[A-Za-z0-9-]+)*"
+    + _LABEL
+    + "){0,10}"
     + _DOT
     + _TLD
     + "(?![A-Za-z0-9-])(?:/[^\\s<>\"'«»]*)?",
@@ -207,27 +215,25 @@ def sanitize_model_text(
     return cleaned
 
 
-_FENCE = re.compile(r"^\s*```(?:json|JSON)?\s*(.*?)\s*```\s*$", re.S)
-
-
 def parse_llm_output(content: str) -> LLMAnswer | None:
     """Parse the model reply. Returns None when it is not the JSON we asked for.
 
     Tolerated: a ```json fence around the object, and prose before/after the
-    object (we take the outermost {...}). Not tolerated: anything that does
-    not validate against ``LLMAnswer``.
+    object: both fall away because we take the outermost {...}. Not tolerated:
+    anything that does not validate against ``LLMAnswer``.
+
+    Deliberately no regex: the reply is model output an injected question can
+    shape, and a fence pattern such as ``\\s*(.*?)\\s*```` backtracks in cubic
+    time on a long run of spaces (a minute of CPU for 4,000 of them).
     """
     text = content.strip()
-    fenced = _FENCE.match(text)
-    if fenced:
-        text = fenced.group(1)
     start, end = text.find("{"), text.rfind("}")
     if start == -1 or end <= start:
         return None
     try:
         data = json.loads(text[start : end + 1])
         return LLMAnswer.model_validate(data)
-    except (json.JSONDecodeError, ValidationError):
+    except (json.JSONDecodeError, ValidationError, RecursionError):  # deep nesting: [[[[...
         return None
 
 

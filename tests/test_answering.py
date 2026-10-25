@@ -1,6 +1,7 @@
 """Refusal gate, LLM output parsing and citation validation."""
 
 import json
+import time
 
 import pytest
 
@@ -414,3 +415,51 @@ def test_only_real_tlds_count_and_the_laws_own_host_is_kept():
     for text in ("istd.gov.jo.evil.com", "evil-istd.gov.jo", "istd.gov.jo/../../evil", "pay.evil.shop"):
         cleaned = sanitize_model_text(f"زر {text}", allowed_urls={own})
         assert cleaned == f"زر {PLACEHOLDER}", (text, cleaned)
+
+
+# ---- round 4: model output cannot make parsing or sanitizing slow -----------------------------
+
+# Model output is shaped by the question, so an injected question can ask for these. Before
+# the fix, the fence regex took about a minute on 4,000 spaces (cubic) and the link pattern
+# about 4.5 s on "a." * 3000 (quadratic); now each case takes milliseconds.
+SLOW_INPUT_BUDGET_SECONDS = 0.5
+ADVERSARIAL_MODEL_TEXT = [
+    "```json" + " " * 20_000 + "x",
+    "```json\n{" + " " * 20_000 + "``` x",
+    "a." * 3_000,
+    "a.b-" * 1_500,
+    ("a" * 50 + ".") * 110,
+    "a@" + "b." * 2_900,
+    "x" * 6_000 + "@",
+]
+
+
+@pytest.mark.parametrize("text", ADVERSARIAL_MODEL_TEXT, ids=range(len(ADVERSARIAL_MODEL_TEXT)))
+def test_parsing_and_sanitizing_stay_fast_on_adversarial_model_output(text):
+    started = time.perf_counter()
+    parse_llm_output(text)
+    sanitize_model_text(text, allowed_urls={"https://istd.gov.jo/law.pdf"})
+    assert time.perf_counter() - started < SLOW_INPUT_BUDGET_SECONDS
+
+
+def test_a_fenced_reply_with_long_padding_still_parses():
+    content = "```json" + " " * 5_000 + '{"answer": "نص", "citations": [], "refused": true}' + " " * 5_000 + "```"
+    parsed = parse_llm_output(content)
+    assert parsed is not None and parsed.refused is True
+
+
+def test_bounded_link_pattern_still_catches_long_addresses():
+    long_local = "x" * 100 + "@evil.com"
+    deep_host = ".".join("abcdefghijkl") + ".evil.com"  # 14 labels
+    for text in (long_local, deep_host):
+        cleaned = sanitize_model_text(f"زر {text} الآن", allowed_urls=set())
+        assert "evil" not in cleaned and PLACEHOLDER in cleaned, cleaned
+
+
+def test_leading_hyphens_do_not_hide_a_domain():
+    cleaned = sanitize_model_text("ادفع عبر -evil.com/pay أو --evil.io", allowed_urls=set())
+    assert "evil" not in cleaned and cleaned.count(PLACEHOLDER) == 2, cleaned
+
+
+def test_deeply_nested_model_json_is_invalid_output_not_a_crash():
+    assert parse_llm_output('{"answer":' + "[" * 3_000 + "}") is None
