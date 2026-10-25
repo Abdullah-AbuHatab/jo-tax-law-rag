@@ -1,5 +1,6 @@
-# Weekly update PRs for what this repository pins: Python packages (requirements*.txt,
-# and tools/requirements.txt for the data-preparation tools), the Docker base image
+# Weekly update PRs for what this repository pins: Python packages (requirements*.txt;
+# the "/" entry also covers tools/requirements.txt, so a separate /tools entry only
+# produced duplicate PRs), the Docker base image
 # digest, and the GitHub Actions commit SHAs in .github/workflows.
 # cooldown: a release must be 7 days old before Dependabot proposes it, so a
 # compromised release that is yanked within days never reaches a PR.
@@ -9,14 +10,6 @@ version: 2
 updates:
   - package-ecosystem: pip
     directory: "/"
-    schedule:
-      interval: weekly
-    cooldown:
-      default-days: 7
-    open-pull-requests-limit: 5
-
-  - package-ecosystem: pip
-    directory: "/tools"
     schedule:
       interval: weekly
     cooldown:
