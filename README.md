@@ -62,7 +62,9 @@ flowchart LR
 | `app/llm.py` | `OpenRouterClient` (REST, fallbacks, stable error codes), `FakeLLM` |
 | `app/prompts.py` | System prompt; retrieved articles fenced as untrusted data |
 | `app/answering.py` | Gate → generate → validate ("the model proposes, code decides") |
-| `app/main.py` | FastAPI app, error mapping, rate limit, static UI |
+| `app/main.py` | FastAPI app, error mapping, security headers, body cap, rate limit, static UI |
+| `app/rate_limit.py` | Per-minute sliding-window limiter, client IP (Cloudflare header first), pseudonymous `client_key` |
+| `app/guards.py` | Daily budgets (embeddings, LLM), per-client daily limit, concurrency gate, answer cache |
 | `app/ingest.py`, `app/eval.py` | CLIs |
 | `tools/` | Data preparation from the official files (not needed at runtime) |
 
@@ -101,27 +103,33 @@ Other choices you might ask about in an interview:
   re-embeds everything.
 - **The app always starts.** No database connection is opened at startup. The first request that needs the
   database opens the pool, so a cold or unreachable Neon instance gives `503 DATABASE_UNAVAILABLE` instead of a
-  crash, and the next request retries. `/health` (liveness) never touches the database; `/health/db` does.
+  crash. After a failed attempt, requests fail fast for 5 s (no queue of callers each waiting for the connect
+  timeout), then the next one retries. `/health` (liveness, an async route that needs no worker thread) never
+  touches the database; `/health/db` does, and it is private (see API).
 - **REST, no vendor SDKs.** Gemini and OpenRouter are called with `httpx`. Every call has an explicit timeout.
-  Gemini is retried with exponential backoff and jitter on 429/5xx only (it honours `Retry-After`). OpenRouter
-  failover happens server-side through its `models` array.
+  Ingest retries Gemini with exponential backoff and jitter on 429/5xx only (up to 4 attempts, honouring
+  `Retry-After`). The query embedding of a question makes at most 2 attempts within `GEMINI_TIMEOUT_SECONDS`
+  (15 s) in total, and the LLM call gets what is left of `ASK_DEADLINE_SECONDS` (35 s), at most
+  `OPENROUTER_TIMEOUT_SECONDS` (20 s) of wall-clock time, so one question cannot hold a worker longer.
+  OpenRouter failover happens server-side through its `models` array.
 - **Stable error codes.** Clients see a fixed code and message, for example `LLM_TIMEOUT` or `LLM_RATE_LIMITED`.
   Upstream error text is never forwarded, and server logs record only the status and the upstream error code.
-- **Rate limiting.** `/ask` uses a per-IP sliding window held in process memory. That is correct for one instance
-  (the Render free plan) and wrong for several, which would need Redis. `X-Forwarded-For` is trusted only for the
-  configured number of proxy hops.
+- **Rate limiting.** `/ask` uses a per-client sliding window held in process memory (a client is an IPv4
+  address, or an IPv6 /64). That is correct for one instance (the Render free plan) and wrong for several, which
+  would need Redis. `X-Forwarded-For` is trusted only for the configured number of proxy hops.
 
 ## API
 
 | Method | Path | Notes |
 |---|---|---|
-| `GET` | `/health` | liveness, no dependencies |
-| `GET` | `/health/db` | real `SELECT 1`; `503` when the database is down |
-| `POST` | `/ask` | `{question, law_id?, top_k?}`, rate-limited per IP |
+| `GET`, `HEAD` | `/health` | liveness, no dependencies (Render's health check) |
+| `GET` | `/health/db` | private: `404` unless header `X-Health-Token` equals `HEALTH_TOKEN`; then a real `SELECT 1`, `503` when the database is down |
+| `POST` | `/ask` | `{question, law_id?, top_k?}`; per-client limits and daily budgets (see [Security & privacy](#security--privacy)); with Turnstile on, header `CF-Turnstile-Response` |
+| `GET` | `/config` | `{"turnstile_site_key": …}`, `null` when Turnstile is off |
 | `GET` | `/laws` | the available laws |
 | `GET` | `/laws/{law_id}/articles/{n}` | full article text and amendment notes; `n` = `6`, `4bis` or `4 مكرر` |
-| `GET` | `/docs` | OpenAPI UI |
-| `GET` | `/` | the RTL Arabic page |
+| `GET` | `/docs` | OpenAPI UI (Swagger UI pinned to one release); `/redoc` is off |
+| `GET`, `HEAD` | `/` | the RTL Arabic page |
 
 Example (shape only; the values come from a fake run):
 
@@ -144,7 +152,10 @@ Example (shape only; the values come from a fake run):
 
 `refusal_reason` is one of `LOW_RETRIEVAL_SCORE`, `MODEL_REFUSED`, `NO_VALID_CITATIONS` or
 `LLM_INVALID_OUTPUT`. Errors use the shape `{"error": {"code", "message"}}` with codes `VALIDATION_ERROR`,
-`UNKNOWN_LAW`, `RATE_LIMITED`, `PAYLOAD_TOO_LARGE`, `DATABASE_UNAVAILABLE`, `EMBEDDING_UNAVAILABLE`, `LLM_*`.
+`UNKNOWN_LAW`, `RATE_LIMITED` (429), `DAILY_LIMIT_REACHED` (429), `BUSY` (503), `DAILY_BUDGET_EXHAUSTED` (503),
+`CAPTCHA_REQUIRED` (403), `CAPTCHA_FAILED` (403, or 503 when Cloudflare cannot be reached), `PAYLOAD_TOO_LARGE`,
+`DATABASE_UNAVAILABLE`, `EMBEDDING_UNAVAILABLE`, `LLM_*`, `INTERNAL_ERROR` (500). The 429s, `BUSY`,
+`DAILY_BUDGET_EXHAUSTED` and an unreachable Turnstile carry a `Retry-After` header in seconds.
 
 ## Run locally
 
@@ -178,6 +189,7 @@ ruff check . && ruff format --check .
 pytest                       # unit + API tests; pgvector tests are skipped
 docker run -d --rm -p 55432:5432 -e POSTGRES_PASSWORD=test pgvector/pgvector:pg16
 TEST_DATABASE_URL=postgresql://postgres:test@localhost:55432/postgres pytest   # adds the pgvector tests
+# (they drop law_chunks and create throwaway roles: use a throwaway container only)
 ```
 
 The tests use the real cleaned law text. They cover article parsing and heading variants, normalization,
@@ -190,7 +202,8 @@ that really is in the cited article.
 
 1. Create a Neon project (free tier). Copy the **pooled** connection string (host contains `-pooler`, keep
    `sslmode=require`).
-2. Run once from your machine. The migration creates the `vector` extension, the table and the HNSW index:
+2. Run once from your machine with the **owner** connection string. Ingest always applies the migrations
+   (the `vector` extension, the table and the HNSW index); the web service never does:
 
    ```bash
    export DATABASE_URL='postgresql://…-pooler…neon.tech/neondb?sslmode=require'
@@ -199,7 +212,32 @@ that really is in the cited article.
    python -m app.ingest
    ```
 
-3. Run it again whenever `data/clean/` changes. Only changed articles are re-embedded.
+3. Create the SELECT-only role the web service connects with (once; run it again to rotate its password):
+
+   ```bash
+   # Neon: add channel_binding=require to the owner URL (Neon's own connection strings include it)
+   OWNER_DATABASE_URL="$DATABASE_URL" python -I tools/create_reader_role.py --plaintext-password
+   # prints only "role ready"; the reader URL goes to .env as DATABASE_URL_READER=…
+   ```
+
+   **Least privilege.** In one transaction, the tool creates `rag_reader` (login only: no superuser, createdb,
+   createrole, replication or bypassrls) with CONNECT on the database, USAGE on schema `public` and SELECT on
+   `law_chunks` and `schema_migrations`, nothing else. It limits the role to 20 connections and sets
+   `statement_timeout = 5s` and `idle_in_transaction_session_timeout = 10s` on the role itself, so every session
+   gets them (the app's pool sends no startup options, which Neon's pooler may reject). It then checks that no
+   write or CREATE privilege is left, and refuses, changing nothing, if the role belongs to another role. Paste
+   `DATABASE_URL_READER` into Render as `DATABASE_URL`.
+
+   **`--plaintext-password`.** By default the password reaches the server only as a SCRAM-SHA-256 verifier
+   computed locally, so its plaintext is never part of any SQL text. Neon rejects pre-hashed passwords, so on
+   Neon you need this flag: the password is then sent as a quoted literal. The tool refuses the flag unless the
+   owner URL authenticates the server, with `channel_binding=require` or `sslmode=verify-full`.
+   `sslmode=require` alone encrypts the connection but does not stop a man in the middle. The literal may appear
+   in server-side statement logs or statistics (for example `pg_stat_statements`). If that matters, rotate by
+   running the tool again.
+
+4. Run ingest again whenever `data/clean/` changes. Only changed articles are re-embedded. Restart the web
+   service afterwards to clear its answer cache.
 
 ## Evaluation
 
@@ -237,14 +275,143 @@ definition instead. To recalibrate, run the eval and compare the two score range
 
 1. Push the repository to GitHub, then in Render: **New → Blueprint** → select the repo. `render.yaml` defines
    one free Docker web service in Frankfurt, health-checked on `/health`.
-2. Render asks for the `sync: false` secrets: `DATABASE_URL` (Neon pooled string), `GEMINI_API_KEY`,
-   `OPENROUTER_API_KEY`.
-3. Ingest into Neon from your machine (see above). The web service never ingests.
+2. Render asks for the `sync: false` secrets: `DATABASE_URL` (the pooled **reader** URL from
+   `tools/create_reader_role.py`, not the owner URL), `GEMINI_API_KEY`, `OPENROUTER_API_KEY`, and optionally
+   `HEALTH_TOKEN` (a long random string; leave it unset and `/health/db` always answers 404). The blueprint also
+   sets `RUN_MIGRATIONS=false`, `CLIENT_IP_HEADER=cf-connecting-ip`, `TRUSTED_PROXY_HOPS=0`, the daily budgets and
+   the per-client limits.
+   Render's health check stays on `/health`, which never touches the database. Do not point an uptime or
+   keep-alive pinger at `/health/db`: it would keep Neon's compute awake.
+3. Ingest into Neon from your machine (see above). The web service never ingests or migrates.
 4. Open the service URL. The first request after idle time is slow: Render free services sleep after inactivity
    and Neon suspends its compute. The app answers `503` until the database wakes, and the UI says so.
 
-CI (`.github/workflows/ci.yml`) runs ruff, all tests against a `pgvector/pgvector:pg16` service container, and
-the offline eval.
+CI (`.github/workflows/ci.yml`) installs the runtime from `requirements.lock` (the image's exact set), checks
+that the lock matches `requirements.txt`, runs ruff, `pip-audit` on the lock, all tests against a
+`pgvector/pgvector:pg16` service container, and the offline eval. Actions are pinned to commit SHAs. The Docker
+base image and the pgvector image (in CI and `docker-compose.yml`) are pinned to digests. Dependabot
+(`.github/dependabot.yml`, 7-day cooldown) proposes weekly updates, including `tools/requirements.txt`. It does
+not update the pgvector digest: bump that by hand.
+
+### Dependencies
+
+`requirements.txt` is the short, human-edited list of direct pins. `requirements.lock` pins the whole closure
+(44 packages) with hashes, and the Docker image installs only that file
+(`pip install --require-hashes --no-deps`). After editing `requirements.txt`, or when Dependabot bumps it, which
+it does without touching the lock, regenerate the lock in the image's own Python:
+
+```bash
+docker run --rm -v "$PWD:/work" -w /work python:3.12-slim \
+  sh -c "pip install -q pip-tools==7.6.2 && \
+         pip-compile --quiet --strip-extras --generate-hashes --output-file=requirements.lock requirements.txt"
+```
+
+pip-compile keeps the existing pins and changes only what `requirements.txt` forces. To pick up a fixed
+transitive release that `pip-audit` reports, add `--upgrade-package <name>`.
+
+## Security & privacy
+
+The public demo runs on the owner's free-tier keys, so the main risks are quota and cost abuse, not data theft.
+The corpus is public law text. To report a problem, see `SECURITY.md`.
+
+### Privacy
+
+- The text of a question is sent to Google Gemini (embedding) and to OpenRouter (the free model that writes the
+  answer). Those providers' free tiers may log inputs or use them for training. The page says so above the form
+  and asks users not to type personal data.
+- This app does not log questions. It does not log client IP addresses either. Each request line carries a
+  salted 12-hex `client_key` (salt random per process), the method, the path (percent-encoded, at most 200
+  characters), the status and the latency. uvicorn's own access log, which would add the peer address, is off.
+
+### Threat model (audits of 2026-10-25)
+
+| # | Threat | Mitigation | Where |
+|---|---|---|---|
+| A1 | One client, or many rotating ones, drain the Gemini and OpenRouter quotas and take the demo down | Daily budgets for query embeddings (800) and LLM calls (45), set below the providers' free caps. Each client gets at most 30 questions and 5 LLM calls a day (cache hits and low-score refusals cost no LLM call), so one client can no longer use up the LLM budget alone. Rotating addresses (about 9 clients, or IPv6 /64s) is the remaining path, accepted below. An answer cache and single-flight make repeated or simultaneous identical questions cost one upstream call; Turnstile is optional | `app/guards.py`, `app/answering.py`, `app/captcha.py` |
+| A2 | Wrong or forgeable client identity behind Cloudflare → Render | `CLIENT_IP_HEADER=cf-connecting-ip` (overwritten by Cloudflare) wins over `X-Forwarded-For`; every value must parse as one IP; an IPv6 client is its /64 (one host controls a whole /64), an IPv4-mapped address is its IPv4 | `app/rate_limit.py` |
+| A3 | Slow upstream calls hold every worker thread | `MAX_CONCURRENT_ASKS` gate (`503 BUSY`); query embedding at most 2 attempts in 15 s; the LLM gets only what is left of a 35 s deadline per question, enforced on wall-clock time; waiting for an identical question is bounded (30 s, 8 waiters) | `app/guards.py`, `app/embeddings.py`, `app/llm.py`, `app/answering.py` |
+| A4 | A chunked body (no `Content-Length`) bypasses the 16 KB cap | An ASGI middleware counts the bytes actually received and answers `413` | `app/main.py` |
+| A5 | The web process connects as the database owner and runs migrations | It connects as `rag_reader` (SELECT on two tables; login only, no other attributes, no role memberships, 20 connections, 5 s statement timeout, 10 s idle-in-transaction timeout, all checked or set by the tool) with `RUN_MIGRATIONS=false`. The password goes as a SCRAM verifier, or with `--plaintext-password` (Neon) as a literal, and only over an authenticated TLS channel | `app/db.py`, `tools/create_reader_role.py` |
+| A6 | Incomplete security headers; third-party script on `/docs` | HSTS, `nosniff`, `no-referrer`, `X-Frame-Options: DENY`, Permissions-Policy, COOP and CORP on every response, including 500s; CSP `default-src 'none'` on API responses, a strict CSP on `/` (same-origin only, no `data:` images, `object-src 'none'`); `405` keeps its `Allow` header; `/docs` loads Swagger UI 5.33.3 with Subresource Integrity, and its CSP allows only that package path plus the hash of its one inline script; ReDoc off; no `server` header | `app/main.py`, `Dockerfile` |
+| A7 | Spoofed-looking, oversized or link-carrying model output | Control, bidi and invisible characters stripped (soft hyphen, zero-width characters, word joiner, BOM, tag characters), at most 3 blank lines in a row, 4000 characters. Links, e-mail addresses and bare domains with a real TLD are replaced by «[رابط محذوف]», also when written with look-alike dots (`．` `。`), unless they are a law's own source URL or its host. The prompt forbids links and contact details; the UI renders text with `textContent` only; a 422 echoes only a plain field path of at most 64 characters | `app/answering.py`, `app/prompts.py`, `app/main.py` |
+| A8 | Supply chain | Hashed lock file for the whole runtime closure, checked in CI and audited with `pip-audit`; Actions pinned to commit SHAs; base image pinned to a digest; Dependabot with a 7-day cooldown; `SECURITY.md` | `requirements.lock`, `.github/`, `Dockerfile` |
+| A9 | `HEAD /` returned 405; `/favicon.ico` returned 404 | `HEAD` on `/` and `/health`; `/favicon.ico` serves an SVG | `app/main.py` |
+| A10 | Anyone can call `/health/db` to keep Neon awake, or pile up requests on a stalled database | `/health/db` is private (`X-Health-Token`, constant-time compare, `404` otherwise); the pool fails fast for 5 s after a failed open and closes the failed pool | `app/main.py`, `app/db.py` |
+| A11 | Log forging through the decoded request path | The logged path is percent-encoded (controls, spaces, `=` and bidi characters cannot forge fields) and capped at 200 characters | `app/main.py` |
+| A12 | Unhandled errors answered outside the security middleware | Caught inside it: `500 INTERNAL_ERROR` with every header, `X-Request-ID` and a request log line; the traceback goes to the log only | `app/main.py` |
+
+Already in place before the audits: parameterized SQL everywhere, the prompt context escaped and fenced as
+untrusted data, citations validated against what was retrieved, the Gemini key sent in a header, a non-root
+container, and upstream error text never forwarded to clients.
+
+### Accepted risks
+
+- **The limits and budgets live in process memory.** They reset when the free instance restarts, which Render
+  does after about 15 idle minutes, so an attacker who waits can get a fresh budget. The real ceiling is
+  provider-side: the Gemini free tier, OpenRouter's free-model limit, and the key's credit limit ($1). **Keep
+  billing disabled on the Gemini project**, so that exhausting the free tier stops the demo instead of costing
+  money.
+- **Slow-header and slow-body connections** are absorbed by the Cloudflare and Render proxies in front of the
+  app. The app adds no read timeouts of its own.
+- **Rotating client addresses.** Each client is limited (30 questions and 5 LLM calls a day), but about nine
+  addresses, or nine IPv6 /64s, together can still use up the 45 LLM calls of the day. Turnstile (optional,
+  below) and the provider caps are the answers to that.
+- **Prompt injection** can still shape the answer text as long as the answer cites a retrieved article. Links
+  and contact details are removed and the length is capped, and only the person who typed the question sees the
+  result.
+
+### How the limits and budgets work
+
+`POST /ask` passes these checks in order. Daily counters reset at 00:00 UTC (03:00 in Amman).
+
+| Step | Setting (default) | When exceeded |
+|---|---|---|
+| 1. Per-client limit per minute | `RATE_LIMIT_PER_MINUTE` (10) | `429 RATE_LIMITED` |
+| 2. Turnstile token, only when both Turnstile keys are set | `TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET_KEY` (unset) | `403 CAPTCHA_REQUIRED` / `CAPTCHA_FAILED` |
+| 3. Per-client limit per day | `DAILY_ASK_LIMIT_PER_CLIENT` (30) | `429 DAILY_LIMIT_REACHED` |
+| 4. Answer cache: a hit returns at once, already counted by steps 1 and 3 | `ANSWER_CACHE_SIZE` (500), `ANSWER_CACHE_TTL_SECONDS` (86400) | - |
+| 5. Single-flight: an identical question already being answered is waited for | 30 s at most, 8 waiters | then answered normally |
+| 6. Requests in flight | `MAX_CONCURRENT_ASKS` (4) | `503 BUSY` |
+| 7. Query embeddings per day, all clients | `DAILY_EMBEDDING_BUDGET` (800) | `503 DAILY_BUDGET_EXHAUSTED` |
+| 8. LLM calls per client per day, spent only when the LLM is really called | `DAILY_LLM_CALLS_PER_CLIENT` (5) | `429 DAILY_LIMIT_REACHED` |
+| 9. LLM calls per day, all clients, spent only when the LLM is really called | `DAILY_LLM_BUDGET` (45) | `503 DAILY_BUDGET_EXHAUSTED` |
+
+`BUSY`, `DAILY_BUDGET_EXHAUSTED` and a used-up LLM allowance (step 8) give the client's daily question back,
+because nothing was served. When step 9 says no, step 8's call is given back too. The cache key
+is the normalized question (diacritics, hamza forms and spacing folded) plus `law_id` and `top_k`. Only
+successful results are cached. Results with an `error_code` and error responses are not. Refusals below
+`MIN_SIMILARITY` never call the LLM, so they spend no LLM budget. The two global budgets default to just under
+the providers' free caps (Gemini `gemini-embedding-001`: reportedly about 1,000 requests a day; OpenRouter free
+models: about 50 a day without purchased credits). Lower them if the key is shared with anything else.
+
+### Optional: Cloudflare Turnstile
+
+Off by default, and not enabled in `render.yaml`. To turn it on, create a Turnstile widget in the Cloudflare
+dashboard for the service's hostname, then set both `TURNSTILE_SITE_KEY` and `TURNSTILE_SECRET_KEY` on Render.
+Setting only one of them stops the app at start-up. When it is on:
+
+- `GET /config` returns the site key, and the page renders the widget. Only then does the page CSP allow
+  `https://challenges.cloudflare.com` (script and frame).
+- `/ask` needs a fresh token in the `CF-Turnstile-Response` header. The server verifies it with Cloudflare's
+  siteverify (5 s timeout) and fails closed: a missing token is `403 CAPTCHA_REQUIRED`, a bad one
+  `403 CAPTCHA_FAILED`, and an unreachable Cloudflare `503 CAPTCHA_FAILED`. Failed checks do not count against
+  the daily limit.
+
+### Rotating keys and passwords
+
+- **Gemini**: create a new key in Google AI Studio, set `GEMINI_API_KEY` on Render (saving redeploys the
+  service), then delete the old key. Update your local `.env`.
+- **OpenRouter**: create a new key (keep a per-key credit limit), set `OPENROUTER_API_KEY` on Render, then delete
+  the old key.
+- **Reader role**: run `tools/create_reader_role.py` again with `OWNER_DATABASE_URL`, then paste the new
+  `DATABASE_URL_READER` into Render as `DATABASE_URL`. New connections with the old password fail at once, so
+  expect `503 DATABASE_UNAVAILABLE` until the redeploy is live. The tool refuses, and changes nothing, if
+  `rag_reader` was created by another role, is a member of another role, or holds an attribute only a superuser
+  can remove. In that case drop the role and run it again.
+- **Health token**: set a new `HEALTH_TOKEN` on Render.
+- **Neon owner**: reset its password in the Neon console and update your local `.env`. The web service does not
+  use it.
+- If a key leaks, rotate it first, then check the provider's usage page.
 
 ## Limitations
 
@@ -260,7 +427,9 @@ the offline eval.
   disappear. Expect `LLM_RATE_LIMITED` under load. The free Gemini tier has its own quotas.
 - **Retrieval is dense-only.** There is no keyword or BM25 fusion and no reranker. Questions phrased very
   differently from the law's wording can miss, and then the system refuses rather than guesses.
-- **Rate limiting is per process.** It is correct for a single instance only.
+- **Limits live in process memory.** The rate limits, daily budgets and the answer cache are correct for a
+  single instance only, and they reset when the process restarts (a Render free service restarts after it has
+  slept). A budget therefore caps one process lifetime, not strictly one calendar day. See "Accepted risks".
 
 ## License
 

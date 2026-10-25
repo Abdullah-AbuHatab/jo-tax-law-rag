@@ -10,10 +10,12 @@ services:
     region: frankfurt
     dockerfilePath: ./Dockerfile
     healthCheckPath: /health
-    autoDeploy: true
+    autoDeployTrigger: checksPass  # deploy a commit only after its GitHub checks (CI) pass
     envVars:
-      - key: DATABASE_URL          # Neon pooled connection string, sslmode=require
+      - key: DATABASE_URL          # Neon pooled URL of the SELECT-only rag_reader role (tools/create_reader_role.py)
         sync: false
+      - key: RUN_MIGRATIONS        # the web service never migrates; python -m app.ingest does, as the owner
+        value: "false"
       - key: GEMINI_API_KEY
         sync: false
       - key: OPENROUTER_API_KEY
@@ -30,7 +32,26 @@ services:
         value: "0.60"
       - key: RATE_LIMIT_PER_MINUTE
         value: "10"
-      - key: TRUSTED_PROXY_HOPS    # assumes Render appends the client IP to X-Forwarded-For; verify after deploy
-        value: "1"
+      - key: CLIENT_IP_HEADER      # Render's edge is Cloudflare, which overwrites this header with the client IP
+        value: cf-connecting-ip
+      - key: TRUSTED_PROXY_HOPS    # 0: if CLIENT_IP_HEADER is missing, key on the socket peer, never on an X-Forwarded-For entry
+        value: "0"
+      - key: HEALTH_TOKEN          # /health/db answers only with header X-Health-Token = this; unset = always 404
+        sync: false
+      # Abuse and cost guards (README "Security"). Daily counters reset at 00:00 UTC.
+      - key: DAILY_ASK_LIMIT_PER_CLIENT
+        value: "30"
+      - key: DAILY_LLM_CALLS_PER_CLIENT  # so one client cannot use up DAILY_LLM_BUDGET alone
+        value: "5"
+      - key: DAILY_EMBEDDING_BUDGET  # below the Gemini free tier (gemini-embedding-001: reportedly ~1,000 a day)
+        value: "800"
+      - key: DAILY_LLM_BUDGET        # below OpenRouter's free-model cap (~50 a day without purchased credits)
+        value: "45"
+      - key: MAX_CONCURRENT_ASKS
+        value: "4"
+      - key: ANSWER_CACHE_SIZE
+        value: "500"
+      - key: ANSWER_CACHE_TTL_SECONDS
+        value: "86400"
       - key: CORS_ALLOW_ORIGINS    # empty: the UI is served from the same origin
         value: ""
