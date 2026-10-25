@@ -62,6 +62,9 @@ def test_dependabot_watches_the_tools_requirements_too():
     import yaml
 
     config = yaml.safe_load((REPO_ROOT / ".github" / "dependabot.yml").read_text(encoding="utf-8"))
-    pip_dirs = {u["directory"] for u in config["updates"] if u["package-ecosystem"] == "pip"}
-    assert pip_dirs == {"/", "/tools"}
+    pip_dirs = [u["directory"] for u in config["updates"] if u["package-ecosystem"] == "pip"]
+    # The "/" entry also scans tools/requirements.txt; a second "/tools" entry opened every
+    # tools bump twice, so exactly one pip entry is expected.
+    assert pip_dirs == ["/"]
+    assert (REPO_ROOT / "tools" / "requirements.txt").exists()
     assert all(u["cooldown"]["default-days"] == 7 for u in config["updates"])
