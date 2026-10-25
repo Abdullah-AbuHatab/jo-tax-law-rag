@@ -6,6 +6,8 @@
 # source_url: https://istd.gov.jo/EBV4.0/Root_Storage/AR/EB_Legislation/%D9%82%D8%A7%D9%86%D9%88%D9%86_%D8%B1%D9%82%D9%85_6_%D9%84%D8%B3%D9%86%D8%A9_1994_-_%D9%82%D8%A7%D9%86%D9%88%D9%86_%D8%A7%D9%84%D8%B6%D8%B1%D9%8A%D8%A8%D8%A9_%D8%A7%D9%84%D8%B9%D8%A7%D9%85%D8%A9_%D8%B9%D9%84%D9%89_%D8%A7%D9%84%D9%85%D8%A8%D9%8A%D8%B9%D8%A7%D8%AA_%D9%88%D8%AA%D8%B9%D8%AF%D9%8A%D9%84%D8%A7%D8%AA%D9%87_%D8%A7%D9%8A%D9%84%D9%88%D9%84_2022.pdf
 # source_file: data/raw/sales_tax_6_1994_istd_consolidated_2022-09.pdf
 # version: ISTD consolidated text dated September 2022 (includes amending Law No. 15 of 2022)
+# version_ar: النص الموحّد المنشور على موقع دائرة ضريبة الدخل والمبيعات بتاريخ أيلول 2022
+# coverage_note_ar: لا تشمل هذه النصوص الجداول الملحقة بالقانون.
 # retrieved: 2026-10-24
 
 المادة (1)

@@ -63,6 +63,11 @@ class AskResponse(BaseModel):
     disclaimer: str = DISCLAIMER_AR
 
 
+class ArticleSummaryOut(BaseModel):
+    article: str = Field(description='Article key used in URLs, e.g. "6" or "4bis".')
+    article_label: str = Field(description='Article number as printed, e.g. "4 مكرر".')
+
+
 class LawOut(BaseModel):
     law_id: str
     name: str
@@ -73,6 +78,8 @@ class LawOut(BaseModel):
     source_url: str
     retrieved: str
     article_count: int
+    version_ar: str = Field(default="", description="Consolidated version label in Arabic.")
+    coverage_note_ar: str = Field(default="", description="Coverage caveat/note in Arabic.")
 
 
 class ArticleOut(BaseModel):
@@ -83,6 +90,10 @@ class ArticleOut(BaseModel):
     text: str
     notes: list[str]
     source_url: str
+    prev_article: str | None = Field(default=None, description="Previous article key in document order.")
+    prev_article_label: str | None = Field(default=None, description="Previous article label as printed.")
+    next_article: str | None = Field(default=None, description="Next article key in document order.")
+    next_article_label: str | None = Field(default=None, description="Next article label as printed.")
 
 
 class PublicConfigOut(BaseModel):

@@ -608,3 +608,37 @@ def test_client_ip_diagnostics_are_private_and_masked(make_client):
     assert body["true_client_ip"] is None and body["x_real_ip"] is None
     assert "44" not in str(body) and ".9" not in str(body)  # never a full address
     assert "/health/client" not in client.get("/openapi.json").json()["paths"]
+
+
+def test_article_response_names_its_neighbours(make_client):
+    client, _, _ = make_client()
+    four = client.get("/laws/sales_tax_6_1994/articles/4").json()
+    assert (four["next_article"], four["next_article_label"]) == ("4bis", "4 مكرر")
+    bis = client.get("/laws/sales_tax_6_1994/articles/4bis").json()
+    assert (bis["prev_article"], bis["prev_article_label"], bis["next_article"]) == ("4", "4", "5")
+    last = client.get("/laws/sales_tax_6_1994/articles/77").json()
+    assert last["next_article"] is None and last["next_article_label"] is None
+    first = client.get("/laws/income_tax_34_2014/articles/1").json()
+    assert first["prev_article"] is None and first["next_article"] == "2"
+
+
+def test_article_index_lists_every_article_in_document_order(make_client):
+    client, _, _ = make_client()
+    sales = client.get("/laws/sales_tax_6_1994/articles")
+    assert sales.status_code == 200
+    entries = sales.json()
+    assert len(entries) == 78
+    assert [entry["article"] for entry in entries[:6]] == ["1", "2", "3", "4", "4bis", "5"]
+    assert entries[4] == {"article": "4bis", "article_label": "4 مكرر"}
+    assert len(client.get("/laws/income_tax_34_2014/articles").json()) == 82
+    missing = client.get("/laws/nope/articles")
+    assert missing.status_code == 404 and missing.json()["error"]["code"] == "NOT_FOUND"
+    assert sales.headers["content-security-policy"] == "default-src 'none'; frame-ancestors 'none'"
+
+
+def test_laws_expose_arabic_version_and_coverage_note(make_client):
+    client, _, _ = make_client()
+    laws = {law["law_id"]: law for law in client.get("/laws").json()}
+    assert laws["sales_tax_6_1994"]["coverage_note_ar"] == "لا تشمل هذه النصوص الجداول الملحقة بالقانون."
+    assert laws["income_tax_34_2014"]["coverage_note_ar"] == ""
+    assert all(law["version_ar"] for law in laws.values())

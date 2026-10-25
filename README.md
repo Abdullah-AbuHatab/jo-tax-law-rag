@@ -126,8 +126,9 @@ Other choices you might ask about in an interview:
 | `GET` | `/health/db` | private: `404` unless header `X-Health-Token` equals `HEALTH_TOKEN`; then a real `SELECT 1`, `503` when the database is down |
 | `POST` | `/ask` | `{question, law_id?, top_k?}`; per-client limits and daily budgets (see [Security & privacy](#security--privacy)); with Turnstile on, header `CF-Turnstile-Response` |
 | `GET` | `/config` | `{"turnstile_site_key": …}`, `null` when Turnstile is off |
-| `GET` | `/laws` | the available laws |
-| `GET` | `/laws/{law_id}/articles/{n}` | full article text and amendment notes; `n` = `6`, `4bis` or `4 مكرر` |
+| `GET` | `/laws` | the available laws, with their Arabic version and coverage labels |
+| `GET` | `/laws/{law_id}/articles` | article keys and labels in document order |
+| `GET` | `/laws/{law_id}/articles/{n}` | full article text and amendment notes, plus `prev_article` / `next_article` and their labels; `n` = `6`, `4bis` or `4 مكرر` |
 | `GET` | `/docs` | OpenAPI UI (Swagger UI pinned to one release); `/redoc` is off |
 | `GET`, `HEAD` | `/` | the RTL Arabic page |
 

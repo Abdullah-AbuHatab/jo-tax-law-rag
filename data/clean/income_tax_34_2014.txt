@@ -6,6 +6,7 @@
 # source_url: https://istd.gov.jo/EBV4.0/Root_Storage/AR/EB_Tenders/%D9%82%D8%A7%D9%86%D9%88%D9%86_%D8%B6%D8%B1%D9%8A%D8%A8%D8%A9_%D8%A7%D9%84%D8%AF%D8%AE%D9%84_34_%D9%84%D8%B3%D9%86%D8%A9_2014_%D9%88%D8%AA%D8%B9%D8%AF%D9%8A%D9%84%D8%A7%D8%AA%D9%87.docx
 # source_file: data/raw/income_tax_34_2014_istd.docx
 # version: ISTD consolidated text: Law No. 34 of 2014 as amended by Law No. 38 of 2018
+# version_ar: نص موحّد يشمل تعديلات القانون المعدّل رقم (38) لسنة 2018
 # retrieved: 2026-10-24
 # publication_note: نشر القانون الأصلي في عدد الجريدة الرسمية 5320 تاريخ 31/12/2014 وطرأ عليه تعديل بموجب القانون المعدل رقم (38) لسنة 2018 المنشور في عدد الجريدة الرسمية 5547 تاريخ 2/12/2018.
 
