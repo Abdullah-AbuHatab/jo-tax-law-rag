@@ -642,3 +642,9 @@ def test_laws_expose_arabic_version_and_coverage_note(make_client):
     assert laws["sales_tax_6_1994"]["coverage_note_ar"] == "لا تشمل هذه النصوص الجداول الملحقة بالقانون."
     assert laws["income_tax_34_2014"]["coverage_note_ar"] == ""
     assert all(law["version_ar"] for law in laws.values())
+
+
+def test_public_config_exposes_gate_similarity_threshold(make_client):
+    client, _, _ = make_client(min_similarity=0.60)
+    config = client.get("/config").json()
+    assert config["min_similarity"] == 0.60

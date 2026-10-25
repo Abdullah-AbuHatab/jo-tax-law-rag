@@ -55,7 +55,7 @@ def ask(client, token=None, **headers):
 
 def test_turnstile_is_off_by_default(laws, embedder, filled_store):
     client = build(laws, embedder, filled_store)
-    assert client.get("/config").json() == {"turnstile_site_key": None}
+    assert client.get("/config").json()["turnstile_site_key"] is None
     assert ask(client).status_code == 200  # no token needed
     assert "challenges.cloudflare.com" not in client.get("/").headers["content-security-policy"]
 
@@ -71,7 +71,7 @@ def test_settings_need_both_turnstile_keys_or_neither():
 def test_turnstile_on_requires_a_valid_token(laws, embedder, filled_store):
     siteverify, llm = Siteverify(), FakeLLM()
     client = build(laws, embedder, filled_store, siteverify, llm=llm, **KEYS)
-    assert client.get("/config").json() == {"turnstile_site_key": SITE_KEY}
+    assert client.get("/config").json()["turnstile_site_key"] == SITE_KEY
 
     missing = ask(client)
     assert missing.status_code == 403 and missing.json()["error"]["code"] == "CAPTCHA_REQUIRED"
