@@ -4,13 +4,18 @@ Nothing here runs at import or at app start. The first request that needs
 the database opens the pool; if Neon is cold or unreachable that request
 gets ``DatabaseUnavailable`` (the API turns it into a 503) and the next
 request tries again. The app therefore always starts, even with no DB.
+
+Migrations run on first connect only with ``run_migrations=True`` (the
+ingest/owner path). The web service connects with a SELECT-only role and
+leaves the schema alone.
 """
 
 from __future__ import annotations
 
 import logging
 import threading
-from collections.abc import Iterator
+import time
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -55,16 +60,34 @@ def apply_migrations(conn: psycopg.Connection, migrations_dir: Path = MIGRATIONS
 
 
 class Database:
-    def __init__(self, url: str, connect_timeout_seconds: float = 5.0, pool_max_size: int = 4) -> None:
+    def __init__(
+        self,
+        url: str,
+        connect_timeout_seconds: float = 5.0,
+        pool_max_size: int = 4,
+        run_migrations: bool = False,
+        failure_cooldown_seconds: float = 5.0,
+        clock: Callable[[], float] = time.monotonic,
+    ) -> None:
         self._url = url
         self._connect_timeout = connect_timeout_seconds
         self._pool_max_size = pool_max_size
+        self._run_migrations = run_migrations
         self._pool: ConnectionPool | None = None
         self._lock = threading.Lock()
+        # After a failed open, fail fast until this time instead of every caller
+        # retrying for up to 2 x connect timeout, one after another, under the lock.
+        self._failure_cooldown = failure_cooldown_seconds
+        self._clock = clock
+        self._retry_at = 0.0
 
     @property
     def configured(self) -> bool:
         return bool(self._url)
+
+    @property
+    def run_migrations(self) -> bool:
+        return self._run_migrations
 
     def _open_pool(self) -> ConnectionPool:
         with self._lock:
@@ -72,15 +95,19 @@ class Database:
                 return self._pool
             if not self._url:
                 raise DatabaseUnavailable("DATABASE_URL is not set")
+            if self._clock() < self._retry_at:
+                raise DatabaseUnavailable("database is unavailable (recent failure)")
+            pool: ConnectionPool | None = None
             try:
-                # Migrations first, on a plain connection: register_vector() below
-                # needs the vector extension to exist already.
-                with psycopg.connect(
-                    self._url, connect_timeout=int(self._connect_timeout), prepare_threshold=None
-                ) as conn:
-                    applied = apply_migrations(conn)
-                    if applied:
-                        logger.info("applied migrations", extra={"migrations": applied})
+                if self._run_migrations:
+                    # Migrations first, on a plain connection: register_vector() below
+                    # needs the vector extension to exist already.
+                    with psycopg.connect(
+                        self._url, connect_timeout=int(self._connect_timeout), prepare_threshold=None
+                    ) as conn:
+                        applied = apply_migrations(conn)
+                        if applied:
+                            logger.info("applied migrations", extra={"migrations": applied})
                 pool = ConnectionPool(
                     self._url,
                     min_size=1,
@@ -99,6 +126,9 @@ class Database:
                 )
                 pool.open(wait=True, timeout=self._connect_timeout * 2)
             except (psycopg.Error, PoolTimeout, OSError) as exc:
+                if pool is not None:
+                    pool.close()  # else its workers keep reconnecting in the background
+                self._retry_at = self._clock() + self._failure_cooldown
                 logger.warning("database unavailable", extra={"error_type": type(exc).__name__})
                 raise DatabaseUnavailable("database is unavailable") from exc
             self._pool = pool

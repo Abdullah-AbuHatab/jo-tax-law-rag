@@ -2,9 +2,11 @@
 
 from dataclasses import replace
 
+import app.dependencies
 from app.chunking import MAX_ARTICLE_CHARS, chunk_article, chunk_id, chunk_law, content_hash
+from app.config import Settings
 from app.embeddings import FakeEmbedder
-from app.ingest import ingest_law, ingest_laws
+from app.ingest import ingest_law, ingest_laws, main
 from app.store import InMemoryStore
 
 
@@ -99,3 +101,28 @@ def test_changing_the_embedding_model_reembeds_everything(laws):
     ingest_law(law, FakeEmbedder(model="fake-a"), store)
     report = ingest_law(law, FakeEmbedder(model="fake-b"), store)
     assert report.embedded == report.chunks
+
+
+def test_run_migrations_is_off_unless_configured():
+    assert Settings.from_env({}).run_migrations is False
+    assert Settings.from_env({"RUN_MIGRATIONS": "true"}).run_migrations is True
+    assert Settings.from_env({"RUN_MIGRATIONS": "false"}).run_migrations is False
+    assert app.dependencies.build_database(Settings.from_env({})).run_migrations is False
+    assert app.dependencies.build_database(Settings.from_env({"RUN_MIGRATIONS": "1"})).run_migrations is True
+
+
+def test_ingest_always_runs_migrations(monkeypatch):
+    """Ingest is the owner path: it applies migrations even when RUN_MIGRATIONS is off."""
+    seen: list[bool] = []
+
+    def fake_store(settings, database=None):
+        seen.append(settings.run_migrations)
+        return InMemoryStore()
+
+    for name in ("RUN_MIGRATIONS", "DATABASE_URL", "GEMINI_API_KEY", "OPENROUTER_API_KEY", "DATA_DIR"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("EMBEDDER", "fake")
+    monkeypatch.setenv("VECTOR_STORE", "pgvector")
+    monkeypatch.setattr(app.dependencies, "build_vector_store", fake_store)
+    assert main(["--law", "sales_tax_6_1994"]) == 0
+    assert seen == [True]

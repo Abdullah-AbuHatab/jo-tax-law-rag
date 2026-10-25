@@ -95,7 +95,8 @@ def main(argv: list[str] | None = None) -> int:
     from app.dependencies import build_embedder, build_vector_store
 
     embedder = build_embedder(settings)
-    store = build_vector_store(settings)
+    # Ingest is the owner path: it always applies migrations, whatever RUN_MIGRATIONS says.
+    store = build_vector_store(settings.model_copy(update={"run_migrations": True}))
     for report in ingest_laws(laws, embedder, store):
         print(
             f"{report.law_id}: {report.articles} articles, {report.chunks} chunks, "
