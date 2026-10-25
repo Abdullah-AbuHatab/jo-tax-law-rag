@@ -149,11 +149,16 @@ INDEX_CSP_TURNSTILE = INDEX_CSP.replace(
     "script-src 'self';",
     "script-src 'self' https://challenges.cloudflare.com; frame-src https://challenges.cloudflare.com;",
 )
+# Without Turnstile, also Trusted Types with no policy: app.js builds the DOM only with
+# createElement and textContent, so the browser may refuse every string-to-code sink
+# (innerHTML, script.src, eval, ...) and a future DOM-XSS bug throws instead of running.
+# Not with Turnstile: its loader assigns script.src, which that would block.
+INDEX_CSP_TRUSTED_TYPES = INDEX_CSP + "; require-trusted-types-for 'script'; trusted-types 'none'"
 
 
 def security_headers(path: str, turnstile: bool = False) -> dict[str, str]:
     """Headers for every response: the common set plus the CSP for this path."""
-    page_csp = INDEX_CSP_TURNSTILE if turnstile else INDEX_CSP
+    page_csp = INDEX_CSP_TURNSTILE if turnstile else INDEX_CSP_TRUSTED_TYPES
     csp = {"/": page_csp, "/docs": DOCS_CSP}.get(path, API_CSP)
     return {**COMMON_SECURITY_HEADERS, "Content-Security-Policy": csp}
 
@@ -600,7 +605,7 @@ def create_app(
 
     @app.api_route("/", methods=["GET", "HEAD"], include_in_schema=False)
     def index() -> FileResponse:
-        # Its CSP (INDEX_CSP) is set by request_guard, like every other header.
+        # Its CSP (INDEX_CSP_TRUSTED_TYPES, or INDEX_CSP_TURNSTILE) is set by request_guard, like every other header.
         return FileResponse(STATIC_DIR / "index.html", headers={"Cache-Control": "no-cache"})
 
     @app.get("/docs", include_in_schema=False)

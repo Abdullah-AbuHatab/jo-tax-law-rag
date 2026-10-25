@@ -588,7 +588,8 @@ def test_validation_message_echoes_only_a_safe_field_path(make_client):
 
 INDEX_CSP_EXPECTED = (
     "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; object-src 'none'; "
-    "connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
+    "connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'; "
+    "require-trusted-types-for 'script'; trusted-types 'none'"
 )
 
 
