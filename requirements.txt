@@ -1,7 +1,7 @@
 # Runtime dependencies (pinned). Keep this list short: every entry is code we ship.
 fastapi==0.162.0
 uvicorn==0.54.0
-pydantic==2.14.1
+pydantic==2.14.2
 httpx==0.28.1
 psycopg[binary]==3.3.6
 psycopg-pool==3.3.3
