@@ -2,7 +2,7 @@
 # Pinned by digest (multi-arch index) so a rebuild cannot pull a different base;
 # Dependabot (docker ecosystem) proposes digest bumps.
 # python:3.12-slim = 3.12.15-slim-trixie, resolved 2026-10-25
-FROM python:3.12-slim@sha256:a0f57064cbdcd6285fa45f51237ab0b35ea8ebaed06a1f5973e89e19dfb86704
+FROM python:3.15-slim@sha256:65a65fc7b30b06cb6df4930fd4650697cb23f4c2698ab81fc87e4b031bc36928
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
